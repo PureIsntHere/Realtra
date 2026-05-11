@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
 local Core = {
-    Version = "3.0.0",
+    Version = "3.1.0",
     Debug = false
 }
 
@@ -4485,6 +4485,7 @@ if env[_markerKey] then
 end
 
 local Library = {
+    Version = Core.Version,
     Core = Core,
     Theme = Theme,
     UI = UI,

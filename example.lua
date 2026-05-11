@@ -21,7 +21,7 @@ end
 -- ============================================================
 local splash = Library:ShowLoadingSplash({
     Title   = "Réaltra Showcase",
-    Version = "3.0.0",
+    Version = Library.Version,
     Status  = "Initializing...",
     Footer  = "Booting Réaltra UI Library",
 })
@@ -62,7 +62,7 @@ end
 -- Shown after the splash closes (small delay so it doesn't overlap)
 task.delay(2.2, function()
     Library:ShowAnnouncement({
-        Title   = "Welcome to Réaltra v3.0",
+        Title   = "Welcome to Réaltra v" .. Library.Version,
         Message = "This showcase demonstrates every feature in the Réaltra UI Library.\n\n"
                .. "Explore each tab to see Labels, Buttons, Toggles, Sliders, Textboxes, "
                .. "Dropdowns, MultiDropdowns, Hotkeys, ColorPickers, ProgressBars, Sections, "
@@ -106,7 +106,7 @@ end)
 -- ============================================================
 local Window = Library:CreateWindow({
     Title    = "Réaltra Showcase",
-    SubTitle = "v3.0.0 · All Features",
+    SubTitle = "v" .. Library.Version .. " · All Features",
     Size     = Vector2.new(820, 540),
 })
 
@@ -322,7 +322,9 @@ sliderSection:AddSlider({
     Callback = function(v) save() end,
 })
 
-local fineSlider = sliderSection:AddSlider({
+local sliderReadout = sliderSection:AddLabel({ Text = "Current float value: 1.00" })
+
+sliderSection:AddSlider({
     Text     = "Float Slider (0.1–3.0, step 0.05)",
     Flag     = "Demo_FloatSlider",
     Min      = 0.1,
@@ -330,13 +332,11 @@ local fineSlider = sliderSection:AddSlider({
     Step     = 0.05,
     Value    = 1.0,
     Tooltip  = "Fine-grained float slider, useful for animation speed",
-    Callback = function(v) save() end,
+    Callback = function(v)
+        sliderReadout:SetText(string.format("Current float value: %.2f", v))
+        save()
+    end,
 })
-
-local sliderReadout = sliderSection:AddLabel({ Text = "Current float value: 1.00" })
-fineSlider:OnChanged(function(v)
-    sliderReadout:SetText(string.format("Current float value: %.2f", v))
-end)
 
 -- ── TextInput ────────────────────────────────────────────────
 local textSection = ComponentsTab:AddSection({ Text = "TextInput" })
@@ -487,7 +487,7 @@ local secondaryColor = colorSection:AddColorPicker({
 colorSection:AddButton({
     Text    = "Read Color Values",
     Callback = function()
-        local c1, _ = primaryColor:GetValue and primaryColor:GetValue() or Color3.new(1,1,1)
+        local c1 = (primaryColor and primaryColor.GetValue) and primaryColor:GetValue() or Color3.new(1,1,1)
         Library:Notify({
             Title = "Color Values",
             Text  = string.format("Primary picked! Check console for details."),
