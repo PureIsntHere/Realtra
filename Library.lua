@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
 local Core = {
-    Version = "3.2.0",
+    Version = "3.2.1",
     Debug = false
 }
 
@@ -2566,69 +2566,40 @@ local function BuildUI(Theme)
 
         local numOptions = #self._options
         local maxHeight = math.min(numOptions * Core.Layout.ComponentHeight, Core.Layout.ComponentHeight * 5)
+        local size = self._open and UDim2.new(1, 0, 0, maxHeight) or UDim2.new(1, 0, 0, 0)
 
+        Core.Util.Tween(self.List, {Size = size}, 0.2)
         Core.Util.Tween(self.Arrow, {Rotation = self._open and 180 or 0}, 0.2)
 
-        if self._open then
-            -- Defer to the next frame so AbsolutePosition/Size are fully settled
-            -- and so the outside-click handler doesn't catch the very click that
-            -- opened the dropdown (UserInputService fires in the same frame).
-            task.defer(function()
-                if not self._open then return end
-
-                local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
-
-                -- AbsolutePosition is in screen pixels (Y=0 at top of viewport).
-                -- A ScreenGui with IgnoreGuiInset=false has its origin at Y=insetY,
-                -- so we subtract insetY to convert to ScreenGui-local offsets.
-                local insetY = 0
-                if screenGui and not screenGui.IgnoreGuiInset then
-                    local ok, gs = pcall(function() return GuiService:GetGuiInset() end)
-                    if ok and gs then insetY = gs.Y end
-                end
-
-                local rPos  = self.Root.AbsolutePosition
-                local rSize = self.Root.AbsoluteSize
-                local screenH = workspace.CurrentCamera.ViewportSize.Y
-                local openUp  = (rPos.Y + rSize.Y + maxHeight) > screenH
-                local listY   = (openUp and (rPos.Y - maxHeight) or (rPos.Y + rSize.Y)) - insetY
-
-                if screenGui then self.List.Parent = screenGui end
-                self.List.ZIndex    = 500
-                self.Options.ZIndex = 501
-                self.List.Position  = UDim2.fromOffset(rPos.X, listY)
-                self.List.Size      = UDim2.fromOffset(rSize.X, 0)
-                Core.Util.Tween(self.List, {Size = UDim2.fromOffset(rSize.X, maxHeight)}, 0.2)
-
-                if self._outsideConn then self._outsideConn:Disconnect() end
-                self._outsideConn = UserInputService.InputBegan:Connect(function(input)
-                    if not Core.Util.IsActivate(input.UserInputType) then return end
-                    local pos = Core.Util.GetInputPosition(input)
-                    local rp, rs = self.Root.AbsolutePosition, self.Root.AbsoluteSize
-                    local lp, ls = self.List.AbsolutePosition, self.List.AbsoluteSize
-                    local inRoot = pos.X >= rp.X and pos.X <= rp.X + rs.X
-                        and pos.Y >= rp.Y and pos.Y <= rp.Y + rs.Y
-                    local inList = pos.X >= lp.X and pos.X <= lp.X + ls.X
-                        and pos.Y >= lp.Y and pos.Y <= lp.Y + ls.Y
-                    if not inRoot and not inList then
-                        self:Toggle(false)
+        local function updateSectionZIndex(isOpen)
+            local p = self.Root.Parent
+            if p and p.Name == "Content" then
+                local sectionFrame = p.Parent
+                if sectionFrame and sectionFrame.Name == "Section" then
+                    local count = sectionFrame:GetAttribute("OpenDropdowns") or 0
+                    if isOpen then
+                        count = count + 1
+                    else
+                        count = math.max(0, count - 1)
                     end
-                end)
-            end)
-        else
-            if self._outsideConn then
-                self._outsideConn:Disconnect()
-                self._outsideConn = nil
+                    sectionFrame:SetAttribute("OpenDropdowns", count)
+                    sectionFrame.ZIndex = (count > 0) and 100 or 1
+                end
             end
-            local currentWidth = self.List.AbsoluteSize.X
-            Core.Util.Tween(self.List, {Size = UDim2.fromOffset(currentWidth, 0)}, 0.2)
+        end
+
+        if self._open then
+            self.Root.ZIndex    = 100
+            self.List.ZIndex    = 101
+            self.Options.ZIndex = 102
+            updateSectionZIndex(true)
+        else
             task.delay(0.2, function()
                 if not self._open then
-                    self.List.Parent    = self.Root
-                    self.List.Position  = UDim2.new(0, 0, 1, 0)
-                    self.List.Size      = UDim2.new(1, 0, 0, 0)
+                    self.Root.ZIndex    = 1
                     self.List.ZIndex    = 2
                     self.Options.ZIndex = 1
+                    updateSectionZIndex(false)
                 end
             end)
         end
@@ -2661,20 +2632,6 @@ local function BuildUI(Theme)
 
     function BaseDropdown:Destroy()
         if self._destroyed then return end
-        if self._posTrack then
-            self._posTrack:Disconnect()
-            self._posTrack = nil
-        end
-        if self._outsideConn then
-            self._outsideConn:Disconnect()
-            self._outsideConn = nil
-        end
-        -- If the list was re-parented to the ScreenGui overlay it won't be
-        -- destroyed when Root is destroyed, so clean it up explicitly.
-        if self.List and self.List.Parent ~= self.Root then
-            pcall(function() self.List:Destroy() end)
-            self.List = nil
-        end
         BaseComponent.Destroy(self)
     end
 
@@ -3305,62 +3262,16 @@ local function BuildUI(Theme)
     
     function ColorPicker:Toggle()
         self._open = not self._open
-        local containerH = 170
-
+        local size = self._open and UDim2.new(1, 0, 0, 170) or UDim2.new(1, 0, 0, 0)
+        Core.Util.Tween(self.Container, {Size = size}, 0.2)
         if self._open then
-            task.defer(function()
-                if not self._open then return end
-
-                local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
-
-                local insetY = 0
-                if screenGui and not screenGui.IgnoreGuiInset then
-                    local ok, gs = pcall(function() return GuiService:GetGuiInset() end)
-                    if ok and gs then insetY = gs.Y end
-                end
-
-                local rPos  = self.Root.AbsolutePosition
-                local rSize = self.Root.AbsoluteSize
-                local screenH = workspace.CurrentCamera.ViewportSize.Y
-                local openUp  = (rPos.Y + rSize.Y + containerH) > screenH
-                local contY   = (openUp and (rPos.Y - containerH) or (rPos.Y + rSize.Y)) - insetY
-
-                if screenGui then self.Container.Parent = screenGui end
-                self.Container.ZIndex = 500
-                self.Root.ZIndex      = 100
-                self.Container.Position = UDim2.fromOffset(rPos.X, contY)
-                self.Container.Size     = UDim2.fromOffset(rSize.X, 0)
-                Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(rSize.X, containerH)}, 0.2)
-
-                if self._outsideConn then self._outsideConn:Disconnect() end
-                self._outsideConn = UserInputService.InputBegan:Connect(function(input)
-                    if not Core.Util.IsActivate(input.UserInputType) then return end
-                    local pos = Core.Util.GetInputPosition(input)
-                    local rp, rs = self.Root.AbsolutePosition, self.Root.AbsoluteSize
-                    local cp, cs = self.Container.AbsolutePosition, self.Container.AbsoluteSize
-                    local inRoot = pos.X >= rp.X and pos.X <= rp.X + rs.X
-                        and pos.Y >= rp.Y and pos.Y <= rp.Y + rs.Y
-                    local inCont = pos.X >= cp.X and pos.X <= cp.X + cs.X
-                        and pos.Y >= cp.Y and pos.Y <= cp.Y + cs.Y
-                    if not inRoot and not inCont then
-                        self:Toggle()
-                    end
-                end)
-            end)
+            self.Root.ZIndex      = 100
+            self.Container.ZIndex = 101
         else
-            if self._outsideConn then
-                self._outsideConn:Disconnect()
-                self._outsideConn = nil
-            end
-            local currentWidth = self.Container.AbsoluteSize.X
-            Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(currentWidth, 0)}, 0.2)
             task.delay(0.2, function()
                 if not self._open then
-                    self.Container.Parent   = self.Root
-                    self.Container.Position = UDim2.new(0, 0, 1, 0)
-                    self.Container.Size     = UDim2.new(1, 0, 0, 0)
-                    self.Container.ZIndex   = 2
-                    self.Root.ZIndex        = 1
+                    self.Root.ZIndex      = 1
+                    self.Container.ZIndex = 2
                 end
             end)
         end
@@ -3382,19 +3293,6 @@ local function BuildUI(Theme)
 
     function ColorPicker:Destroy()
         if self._destroyed then return end
-        if self._posTrack then
-            self._posTrack:Disconnect()
-            self._posTrack = nil
-        end
-        if self._outsideConn then
-            self._outsideConn:Disconnect()
-            self._outsideConn = nil
-        end
-        -- If the container was re-parented to the ScreenGui overlay, destroy it explicitly.
-        if self.Container and self.Container.Parent ~= self.Root then
-            pcall(function() self.Container:Destroy() end)
-            self.Container = nil
-        end
         BaseComponent.Destroy(self)
     end
 
