@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
 local Core = {
-    Version = "3.1.0",
+    Version = "3.1.5",
     Debug = false
 }
 
@@ -4343,12 +4343,15 @@ function Announcement.new(opts)
         titleBar.InputBegan:Connect(function(input)
             if input.UserInputType ~= Enum.UserInputType.MouseButton1
                 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-            dragging = true
+            -- Capture the container's current top-left corner in screen space,
+            -- then switch to AnchorPoint (0,0) so UDim2.fromOffset maps directly
+            -- to screen pixels. This prevents any snapping on drag start.
             local abs = self.Container.AbsolutePosition
-            local absSize = self.Container.AbsoluteSize
+            self.Container.AnchorPoint = Vector2.new(0, 0)
+            self.Container.Position    = UDim2.fromOffset(abs.X, abs.Y)
             startInputPos     = Vector2.new(input.Position.X, input.Position.Y)
-            startContainerPos = Vector2.new(abs.X + absSize.X * 0.5, abs.Y + absSize.Y * 0.5)
-            self.Container.AnchorPoint = Vector2.new(0.5, 0.5)
+            startContainerPos = Vector2.new(abs.X, abs.Y)
+            dragging = true
         end)
 
         self._dragConn1 = UserInputService.InputChanged:Connect(function(input)
