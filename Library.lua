@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
 local Core = {
-    Version = "3.1.9",
+    Version = "3.2.0",
     Debug = false
 }
 
@@ -2570,39 +2570,25 @@ local function BuildUI(Theme)
         Core.Util.Tween(self.Arrow, {Rotation = self._open and 180 or 0}, 0.2)
 
         if self._open then
-            -- Re-parent the list to the shared overlay ScreenGui (IgnoreGuiInset = true)
-            -- so it escapes any ancestor ClipsDescendants / ScrollingFrame clipping.
-            -- Because the overlay uses IgnoreGuiInset = true, AbsolutePosition values
-            -- map directly to UDim2.fromOffset — no inset subtraction needed.
-            local overlay = Core.Overlay.Get()
-            self.List.Parent    = overlay
+            -- Re-parent the List into the window's own ScreenGui so it escapes the
+            -- page ScrollingFrame's ClipsDescendants clipping.
+            -- AbsolutePosition values map directly to UDim2.fromOffset in the same
+            -- ScreenGui coordinate space — no inset correction needed.
+            local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
+            if screenGui then self.List.Parent = screenGui end
             self.List.ZIndex    = 500
             self.Options.ZIndex = 501
 
-            -- Compute list position, flipping upward when it would overflow below screen.
-            local function computeListPos()
-                if not self.Root or not self.Root.Parent then return 0, 0, 200 end
-                local rPos  = self.Root.AbsolutePosition
-                local rSize = self.Root.AbsoluteSize
-                local screenH = workspace.CurrentCamera.ViewportSize.Y
-                local openUp  = (rPos.Y + rSize.Y + maxHeight) > screenH
-                local listY   = openUp and (rPos.Y - maxHeight)
-                                       or  (rPos.Y + rSize.Y)
-                return rPos.X, listY, rSize.X
-            end
+            -- Snapshot position now (before any async frame updates can change it).
+            local rPos  = self.Root.AbsolutePosition
+            local rSize = self.Root.AbsoluteSize
+            local screenH = workspace.CurrentCamera.ViewportSize.Y
+            local openUp  = (rPos.Y + rSize.Y + maxHeight) > screenH
+            local listY   = openUp and (rPos.Y - maxHeight) or (rPos.Y + rSize.Y)
 
-            local x, y, w = computeListPos()
-            self.List.Position = UDim2.fromOffset(x, y)
-            self.List.Size     = UDim2.fromOffset(w, 0)
-            Core.Util.Tween(self.List, {Size = UDim2.fromOffset(w, maxHeight)}, 0.2)
-
-            -- Keep the list anchored to the dropdown row as the window is dragged.
-            if self._posTrack then self._posTrack:Disconnect() end
-            self._posTrack = RunService.Heartbeat:Connect(function()
-                if not self._open then return end
-                local px, py = computeListPos()
-                self.List.Position = UDim2.fromOffset(px, py)
-            end)
+            self.List.Position = UDim2.fromOffset(rPos.X, listY)
+            self.List.Size     = UDim2.fromOffset(rSize.X, 0)
+            Core.Util.Tween(self.List, {Size = UDim2.fromOffset(rSize.X, maxHeight)}, 0.2)
 
             if not self._outsideConn then
                 self._outsideConn = UserInputService.InputBegan:Connect(function(input)
@@ -3316,37 +3302,22 @@ local function BuildUI(Theme)
         local containerH = 170
 
         if self._open then
-            -- Re-parent the container to the shared overlay ScreenGui (IgnoreGuiInset = true)
-            -- so it escapes any ancestor ClipsDescendants / ScrollingFrame clipping.
-            local overlay = Core.Overlay.Get()
-            self.Container.Parent = overlay
+            -- Re-parent the Container into the window's own ScreenGui so it escapes
+            -- the page ScrollingFrame's ClipsDescendants clipping.
+            local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
+            if screenGui then self.Container.Parent = screenGui end
             self.Container.ZIndex = 500
             self.Root.ZIndex      = 100
 
-            -- Compute container position, flipping upward when it would overflow.
-            local function computeContainerPos()
-                if not self.Root or not self.Root.Parent then return 0, 0, 200 end
-                local rPos  = self.Root.AbsolutePosition
-                local rSize = self.Root.AbsoluteSize
-                local screenH = workspace.CurrentCamera.ViewportSize.Y
-                local openUp  = (rPos.Y + rSize.Y + containerH) > screenH
-                local contY   = openUp and (rPos.Y - containerH)
-                                       or  (rPos.Y + rSize.Y)
-                return rPos.X, contY, rSize.X
-            end
+            local rPos  = self.Root.AbsolutePosition
+            local rSize = self.Root.AbsoluteSize
+            local screenH = workspace.CurrentCamera.ViewportSize.Y
+            local openUp  = (rPos.Y + rSize.Y + containerH) > screenH
+            local contY   = openUp and (rPos.Y - containerH) or (rPos.Y + rSize.Y)
 
-            local x, y, w = computeContainerPos()
-            self.Container.Position = UDim2.fromOffset(x, y)
-            self.Container.Size     = UDim2.fromOffset(w, 0)
-            Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(w, containerH)}, 0.2)
-
-            -- Keep the container anchored to the row as the window is dragged.
-            if self._posTrack then self._posTrack:Disconnect() end
-            self._posTrack = RunService.Heartbeat:Connect(function()
-                if not self._open then return end
-                local px, py = computeContainerPos()
-                self.Container.Position = UDim2.fromOffset(px, py)
-            end)
+            self.Container.Position = UDim2.fromOffset(rPos.X, contY)
+            self.Container.Size     = UDim2.fromOffset(rSize.X, 0)
+            Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(rSize.X, containerH)}, 0.2)
 
             -- Close when the user clicks outside both the row and the picker panel.
             if not self._outsideConn then
