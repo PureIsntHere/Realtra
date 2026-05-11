@@ -2570,46 +2570,52 @@ local function BuildUI(Theme)
         Core.Util.Tween(self.Arrow, {Rotation = self._open and 180 or 0}, 0.2)
 
         if self._open then
-            -- Re-parent the List into the window's own ScreenGui so it escapes the
-            -- page ScrollingFrame's ClipsDescendants clipping.
-            -- AbsolutePosition values map directly to UDim2.fromOffset in the same
-            -- ScreenGui coordinate space — no inset correction needed.
-            local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
-            if screenGui then self.List.Parent = screenGui end
-            self.List.ZIndex    = 500
-            self.Options.ZIndex = 501
+            -- Defer to the next frame so AbsolutePosition/Size are fully settled
+            -- and so the outside-click handler doesn't catch the very click that
+            -- opened the dropdown (UserInputService fires in the same frame).
+            task.defer(function()
+                if not self._open then return end
 
-            -- Snapshot position now (before any async frame updates can change it).
-            local rPos  = self.Root.AbsolutePosition
-            local rSize = self.Root.AbsoluteSize
-            local screenH = workspace.CurrentCamera.ViewportSize.Y
-            local openUp  = (rPos.Y + rSize.Y + maxHeight) > screenH
-            local listY   = openUp and (rPos.Y - maxHeight) or (rPos.Y + rSize.Y)
+                local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
 
-            self.List.Position = UDim2.fromOffset(rPos.X, listY)
-            self.List.Size     = UDim2.fromOffset(rSize.X, 0)
-            Core.Util.Tween(self.List, {Size = UDim2.fromOffset(rSize.X, maxHeight)}, 0.2)
+                -- AbsolutePosition is in screen pixels (Y=0 at top of viewport).
+                -- A ScreenGui with IgnoreGuiInset=false has its origin at Y=insetY,
+                -- so we subtract insetY to convert to ScreenGui-local offsets.
+                local insetY = 0
+                if screenGui and not screenGui.IgnoreGuiInset then
+                    local ok, gs = pcall(function() return GuiService:GetGuiInset() end)
+                    if ok and gs then insetY = gs.Y end
+                end
 
-            if not self._outsideConn then
+                local rPos  = self.Root.AbsolutePosition
+                local rSize = self.Root.AbsoluteSize
+                local screenH = workspace.CurrentCamera.ViewportSize.Y
+                local openUp  = (rPos.Y + rSize.Y + maxHeight) > screenH
+                local listY   = (openUp and (rPos.Y - maxHeight) or (rPos.Y + rSize.Y)) - insetY
+
+                if screenGui then self.List.Parent = screenGui end
+                self.List.ZIndex    = 500
+                self.Options.ZIndex = 501
+                self.List.Position  = UDim2.fromOffset(rPos.X, listY)
+                self.List.Size      = UDim2.fromOffset(rSize.X, 0)
+                Core.Util.Tween(self.List, {Size = UDim2.fromOffset(rSize.X, maxHeight)}, 0.2)
+
+                if self._outsideConn then self._outsideConn:Disconnect() end
                 self._outsideConn = UserInputService.InputBegan:Connect(function(input)
                     if not Core.Util.IsActivate(input.UserInputType) then return end
                     local pos = Core.Util.GetInputPosition(input)
-                    local rPos, rSize = self.Root.AbsolutePosition, self.Root.AbsoluteSize
-                    local lPos, lSize = self.List.AbsolutePosition, self.List.AbsoluteSize
-                    local inRoot = pos.X >= rPos.X and pos.X <= rPos.X + rSize.X
-                        and pos.Y >= rPos.Y and pos.Y <= rPos.Y + rSize.Y
-                    local inList = pos.X >= lPos.X and pos.X <= lPos.X + lSize.X
-                        and pos.Y >= lPos.Y and pos.Y <= lPos.Y + lSize.Y
+                    local rp, rs = self.Root.AbsolutePosition, self.Root.AbsoluteSize
+                    local lp, ls = self.List.AbsolutePosition, self.List.AbsoluteSize
+                    local inRoot = pos.X >= rp.X and pos.X <= rp.X + rs.X
+                        and pos.Y >= rp.Y and pos.Y <= rp.Y + rs.Y
+                    local inList = pos.X >= lp.X and pos.X <= lp.X + ls.X
+                        and pos.Y >= lp.Y and pos.Y <= lp.Y + ls.Y
                     if not inRoot and not inList then
                         self:Toggle(false)
                     end
                 end)
-            end
+            end)
         else
-            if self._posTrack then
-                self._posTrack:Disconnect()
-                self._posTrack = nil
-            end
             if self._outsideConn then
                 self._outsideConn:Disconnect()
                 self._outsideConn = nil
@@ -3302,44 +3308,46 @@ local function BuildUI(Theme)
         local containerH = 170
 
         if self._open then
-            -- Re-parent the Container into the window's own ScreenGui so it escapes
-            -- the page ScrollingFrame's ClipsDescendants clipping.
-            local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
-            if screenGui then self.Container.Parent = screenGui end
-            self.Container.ZIndex = 500
-            self.Root.ZIndex      = 100
+            task.defer(function()
+                if not self._open then return end
 
-            local rPos  = self.Root.AbsolutePosition
-            local rSize = self.Root.AbsoluteSize
-            local screenH = workspace.CurrentCamera.ViewportSize.Y
-            local openUp  = (rPos.Y + rSize.Y + containerH) > screenH
-            local contY   = openUp and (rPos.Y - containerH) or (rPos.Y + rSize.Y)
+                local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
 
-            self.Container.Position = UDim2.fromOffset(rPos.X, contY)
-            self.Container.Size     = UDim2.fromOffset(rSize.X, 0)
-            Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(rSize.X, containerH)}, 0.2)
+                local insetY = 0
+                if screenGui and not screenGui.IgnoreGuiInset then
+                    local ok, gs = pcall(function() return GuiService:GetGuiInset() end)
+                    if ok and gs then insetY = gs.Y end
+                end
 
-            -- Close when the user clicks outside both the row and the picker panel.
-            if not self._outsideConn then
+                local rPos  = self.Root.AbsolutePosition
+                local rSize = self.Root.AbsoluteSize
+                local screenH = workspace.CurrentCamera.ViewportSize.Y
+                local openUp  = (rPos.Y + rSize.Y + containerH) > screenH
+                local contY   = (openUp and (rPos.Y - containerH) or (rPos.Y + rSize.Y)) - insetY
+
+                if screenGui then self.Container.Parent = screenGui end
+                self.Container.ZIndex = 500
+                self.Root.ZIndex      = 100
+                self.Container.Position = UDim2.fromOffset(rPos.X, contY)
+                self.Container.Size     = UDim2.fromOffset(rSize.X, 0)
+                Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(rSize.X, containerH)}, 0.2)
+
+                if self._outsideConn then self._outsideConn:Disconnect() end
                 self._outsideConn = UserInputService.InputBegan:Connect(function(input)
                     if not Core.Util.IsActivate(input.UserInputType) then return end
                     local pos = Core.Util.GetInputPosition(input)
-                    local rPos, rSize = self.Root.AbsolutePosition, self.Root.AbsoluteSize
-                    local cPos, cSize = self.Container.AbsolutePosition, self.Container.AbsoluteSize
-                    local inRoot = pos.X >= rPos.X and pos.X <= rPos.X + rSize.X
-                        and pos.Y >= rPos.Y and pos.Y <= rPos.Y + rSize.Y
-                    local inCont = pos.X >= cPos.X and pos.X <= cPos.X + cSize.X
-                        and pos.Y >= cPos.Y and pos.Y <= cPos.Y + cSize.Y
+                    local rp, rs = self.Root.AbsolutePosition, self.Root.AbsoluteSize
+                    local cp, cs = self.Container.AbsolutePosition, self.Container.AbsoluteSize
+                    local inRoot = pos.X >= rp.X and pos.X <= rp.X + rs.X
+                        and pos.Y >= rp.Y and pos.Y <= rp.Y + rs.Y
+                    local inCont = pos.X >= cp.X and pos.X <= cp.X + cs.X
+                        and pos.Y >= cp.Y and pos.Y <= cp.Y + cs.Y
                     if not inRoot and not inCont then
                         self:Toggle()
                     end
                 end)
-            end
+            end)
         else
-            if self._posTrack then
-                self._posTrack:Disconnect()
-                self._posTrack = nil
-            end
             if self._outsideConn then
                 self._outsideConn:Disconnect()
                 self._outsideConn = nil
