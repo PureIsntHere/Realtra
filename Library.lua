@@ -4209,6 +4209,7 @@ function Announcement.new(opts)
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        DisplayOrder = 20000,
         Parent = Core.Safety.GetRoot()
     })
     self.ScreenGui:SetAttribute("__g", true)
@@ -4255,7 +4256,45 @@ function Announcement.new(opts)
         TextYAlignment = Enum.TextYAlignment.Center,
         Parent = titleBar
     })
-    
+
+    -- Draggable title bar
+    do
+        local dragging = false
+        local startInputPos, startContainerPos
+
+        titleBar.InputBegan:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseButton1
+                and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            dragging = true
+            local abs = self.Container.AbsolutePosition
+            local absSize = self.Container.AbsoluteSize
+            startInputPos     = Vector2.new(input.Position.X, input.Position.Y)
+            startContainerPos = Vector2.new(abs.X + absSize.X * 0.5, abs.Y + absSize.Y * 0.5)
+            self.Container.AnchorPoint = Vector2.new(0.5, 0.5)
+        end)
+
+        self._dragConn1 = UserInputService.InputChanged:Connect(function(input)
+            if not dragging then return end
+            if input.UserInputType ~= Enum.UserInputType.MouseMovement
+                and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            local delta = Vector2.new(
+                input.Position.X - startInputPos.X,
+                input.Position.Y - startInputPos.Y
+            )
+            self.Container.Position = UDim2.fromOffset(
+                startContainerPos.X + delta.X,
+                startContainerPos.Y + delta.Y
+            )
+        end)
+
+        self._dragConn2 = UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = false
+            end
+        end)
+    end
+
     local messageContainer = Core.Util.Create("Frame", {
         Name = "MessageContainer",
         Size = UDim2.new(1, -32, 1, -130),
@@ -4410,6 +4449,8 @@ end
 function Announcement:Close()
     if not self.ScreenGui or self._closed then return end
     self._closed = true
+    if self._dragConn1 then self._dragConn1:Disconnect(); self._dragConn1 = nil end
+    if self._dragConn2 then self._dragConn2:Disconnect(); self._dragConn2 = nil end
 
     local curSize = self.Container.AbsoluteSize
     local targetSize = UDim2.fromOffset(math.max(1, curSize.X * 0.92), math.max(1, curSize.Y * 0.92))
