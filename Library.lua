@@ -2545,22 +2545,40 @@ local function BuildUI(Theme)
         Core.Util.Tween(self.Arrow, {Rotation = self._open and 180 or 0}, 0.2)
 
         if self._open then
-            -- Re-parent the list to the ScreenGui so it is never clipped by a
-            -- parent ScrollingFrame's ClipsDescendants boundary.
             local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
             local inset = (screenGui and not screenGui.IgnoreGuiInset)
                 and GuiService:GetGuiInset().Y or 0
-            local rootPos  = self.Root.AbsolutePosition
-            local rootSize = self.Root.AbsoluteSize
 
             if screenGui then
                 self.List.Parent = screenGui
             end
-            self.List.Position = UDim2.fromOffset(rootPos.X, rootPos.Y + rootSize.Y - inset)
-            self.List.Size     = UDim2.fromOffset(rootSize.X, 0)
-            self.List.ZIndex   = 500
+            self.List.ZIndex    = 500
             self.Options.ZIndex = 501
-            Core.Util.Tween(self.List, {Size = UDim2.fromOffset(rootSize.X, maxHeight)}, 0.2)
+
+            -- Compute list position, flipping upward when it would overflow below screen.
+            local function computeListPos()
+                if not self.Root or not self.Root.Parent then return 0, 0, 200 end
+                local rPos  = self.Root.AbsolutePosition
+                local rSize = self.Root.AbsoluteSize
+                local screenH = workspace.CurrentCamera.ViewportSize.Y
+                local openUp  = (rPos.Y + rSize.Y - inset + maxHeight) > screenH
+                local listY   = openUp and (rPos.Y - inset - maxHeight)
+                                       or  (rPos.Y + rSize.Y - inset)
+                return rPos.X, listY, rSize.X
+            end
+
+            local x, y, w = computeListPos()
+            self.List.Position = UDim2.fromOffset(x, y)
+            self.List.Size     = UDim2.fromOffset(w, 0)
+            Core.Util.Tween(self.List, {Size = UDim2.fromOffset(w, maxHeight)}, 0.2)
+
+            -- Keep the list anchored to the dropdown row as the window is dragged.
+            if self._posTrack then self._posTrack:Disconnect() end
+            self._posTrack = RunService.Heartbeat:Connect(function()
+                if not self._open then return end
+                local px, py = computeListPos()
+                self.List.Position = UDim2.fromOffset(px, py)
+            end)
 
             if not self._outsideConn then
                 self._outsideConn = UserInputService.InputBegan:Connect(function(input)
@@ -2578,6 +2596,10 @@ local function BuildUI(Theme)
                 end)
             end
         else
+            if self._posTrack then
+                self._posTrack:Disconnect()
+                self._posTrack = nil
+            end
             if self._outsideConn then
                 self._outsideConn:Disconnect()
                 self._outsideConn = nil
@@ -2586,10 +2608,10 @@ local function BuildUI(Theme)
             Core.Util.Tween(self.List, {Size = UDim2.fromOffset(currentWidth, 0)}, 0.2)
             task.delay(0.2, function()
                 if not self._open then
-                    self.List.Parent   = self.Root
-                    self.List.Position = UDim2.new(0, 0, 1, 0)
-                    self.List.Size     = UDim2.new(1, 0, 0, 0)
-                    self.List.ZIndex   = 2
+                    self.List.Parent    = self.Root
+                    self.List.Position  = UDim2.new(0, 0, 1, 0)
+                    self.List.Size      = UDim2.new(1, 0, 0, 0)
+                    self.List.ZIndex    = 2
                     self.Options.ZIndex = 1
                 end
             end)
@@ -2623,6 +2645,10 @@ local function BuildUI(Theme)
 
     function BaseDropdown:Destroy()
         if self._destroyed then return end
+        if self._posTrack then
+            self._posTrack:Disconnect()
+            self._posTrack = nil
+        end
         if self._outsideConn then
             self._outsideConn:Disconnect()
             self._outsideConn = nil
@@ -3263,25 +3289,69 @@ local function BuildUI(Theme)
     
     function ColorPicker:Toggle()
         self._open = not self._open
+        local containerH = 170
 
         if self._open then
-            -- Re-parent the picker container to the ScreenGui so it is never
-            -- clipped by a parent ScrollingFrame's ClipsDescendants boundary.
             local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
             local inset = (screenGui and not screenGui.IgnoreGuiInset)
                 and GuiService:GetGuiInset().Y or 0
-            local rootPos  = self.Root.AbsolutePosition
-            local rootSize = self.Root.AbsoluteSize
 
             if screenGui then
                 self.Container.Parent = screenGui
             end
-            self.Container.Position = UDim2.fromOffset(rootPos.X, rootPos.Y + rootSize.Y - inset)
-            self.Container.Size     = UDim2.fromOffset(rootSize.X, 0)
-            self.Container.ZIndex   = 500
-            self.Root.ZIndex = 100
-            Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(rootSize.X, 170)}, 0.2)
+            self.Container.ZIndex = 500
+            self.Root.ZIndex      = 100
+
+            -- Compute container position, flipping upward when it would overflow.
+            local function computeContainerPos()
+                if not self.Root or not self.Root.Parent then return 0, 0, 200 end
+                local rPos  = self.Root.AbsolutePosition
+                local rSize = self.Root.AbsoluteSize
+                local screenH = workspace.CurrentCamera.ViewportSize.Y
+                local openUp  = (rPos.Y + rSize.Y - inset + containerH) > screenH
+                local contY   = openUp and (rPos.Y - inset - containerH)
+                                       or  (rPos.Y + rSize.Y - inset)
+                return rPos.X, contY, rSize.X
+            end
+
+            local x, y, w = computeContainerPos()
+            self.Container.Position = UDim2.fromOffset(x, y)
+            self.Container.Size     = UDim2.fromOffset(w, 0)
+            Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(w, containerH)}, 0.2)
+
+            -- Keep the container anchored to the row as the window is dragged.
+            if self._posTrack then self._posTrack:Disconnect() end
+            self._posTrack = RunService.Heartbeat:Connect(function()
+                if not self._open then return end
+                local px, py = computeContainerPos()
+                self.Container.Position = UDim2.fromOffset(px, py)
+            end)
+
+            -- Close when the user clicks outside both the row and the picker panel.
+            if not self._outsideConn then
+                self._outsideConn = UserInputService.InputBegan:Connect(function(input)
+                    if not Core.Util.IsActivate(input.UserInputType) then return end
+                    local pos = Core.Util.GetInputPosition(input)
+                    local rPos, rSize = self.Root.AbsolutePosition, self.Root.AbsoluteSize
+                    local cPos, cSize = self.Container.AbsolutePosition, self.Container.AbsoluteSize
+                    local inRoot = pos.X >= rPos.X and pos.X <= rPos.X + rSize.X
+                        and pos.Y >= rPos.Y and pos.Y <= rPos.Y + rSize.Y
+                    local inCont = pos.X >= cPos.X and pos.X <= cPos.X + cSize.X
+                        and pos.Y >= cPos.Y and pos.Y <= cPos.Y + cSize.Y
+                    if not inRoot and not inCont then
+                        self:Toggle()
+                    end
+                end)
+            end
         else
+            if self._posTrack then
+                self._posTrack:Disconnect()
+                self._posTrack = nil
+            end
+            if self._outsideConn then
+                self._outsideConn:Disconnect()
+                self._outsideConn = nil
+            end
             local currentWidth = self.Container.AbsoluteSize.X
             Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(currentWidth, 0)}, 0.2)
             task.delay(0.2, function()
@@ -3312,6 +3382,14 @@ local function BuildUI(Theme)
 
     function ColorPicker:Destroy()
         if self._destroyed then return end
+        if self._posTrack then
+            self._posTrack:Disconnect()
+            self._posTrack = nil
+        end
+        if self._outsideConn then
+            self._outsideConn:Disconnect()
+            self._outsideConn = nil
+        end
         -- If the container was re-parented to the ScreenGui overlay, destroy it explicitly.
         if self.Container and self.Container.Parent ~= self.Root then
             pcall(function() self.Container:Destroy() end)
