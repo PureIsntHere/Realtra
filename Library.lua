@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
 local Core = {
-    Version = "3.1.5",
+    Version = "3.1.9",
     Debug = false
 }
 
@@ -1173,6 +1173,31 @@ Core.Tooltip = {
             Core.Tooltip._active = nil
         end
     end
+}
+
+-- Shared overlay ScreenGui used by dropdowns and colour-pickers so that their
+-- pop-up panels escape ancestor ClipsDescendants / ScrollingFrame clipping.
+-- IgnoreGuiInset = true means UDim2.fromOffset(x, y) directly maps to
+-- AbsolutePosition coordinates — no inset subtraction required.
+Core.Overlay = {
+    _gui = nil,
+    Get = function()
+        if Core.Overlay._gui and Core.Overlay._gui.Parent then
+            return Core.Overlay._gui
+        end
+        local gui = Core.Util.Create("ScreenGui", {
+            Name = Core.Safety.RandomString(16),
+            ResetOnSpawn = false,
+            IgnoreGuiInset = true,
+            ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+            DisplayOrder = 999,
+            Parent = Core.Safety.GetRoot(),
+        })
+        gui:SetAttribute("__g", true)
+        Core.Safety.ProtectInstance(gui)
+        Core.Overlay._gui = gui
+        return gui
+    end,
 }
 
 Core.Modal = {
@@ -2545,13 +2570,12 @@ local function BuildUI(Theme)
         Core.Util.Tween(self.Arrow, {Rotation = self._open and 180 or 0}, 0.2)
 
         if self._open then
-            local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
-            local inset = (screenGui and not screenGui.IgnoreGuiInset)
-                and GuiService:GetGuiInset().Y or 0
-
-            if screenGui then
-                self.List.Parent = screenGui
-            end
+            -- Re-parent the list to the shared overlay ScreenGui (IgnoreGuiInset = true)
+            -- so it escapes any ancestor ClipsDescendants / ScrollingFrame clipping.
+            -- Because the overlay uses IgnoreGuiInset = true, AbsolutePosition values
+            -- map directly to UDim2.fromOffset — no inset subtraction needed.
+            local overlay = Core.Overlay.Get()
+            self.List.Parent    = overlay
             self.List.ZIndex    = 500
             self.Options.ZIndex = 501
 
@@ -2561,9 +2585,9 @@ local function BuildUI(Theme)
                 local rPos  = self.Root.AbsolutePosition
                 local rSize = self.Root.AbsoluteSize
                 local screenH = workspace.CurrentCamera.ViewportSize.Y
-                local openUp  = (rPos.Y + rSize.Y - inset + maxHeight) > screenH
-                local listY   = openUp and (rPos.Y - inset - maxHeight)
-                                       or  (rPos.Y + rSize.Y - inset)
+                local openUp  = (rPos.Y + rSize.Y + maxHeight) > screenH
+                local listY   = openUp and (rPos.Y - maxHeight)
+                                       or  (rPos.Y + rSize.Y)
                 return rPos.X, listY, rSize.X
             end
 
@@ -3292,13 +3316,10 @@ local function BuildUI(Theme)
         local containerH = 170
 
         if self._open then
-            local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
-            local inset = (screenGui and not screenGui.IgnoreGuiInset)
-                and GuiService:GetGuiInset().Y or 0
-
-            if screenGui then
-                self.Container.Parent = screenGui
-            end
+            -- Re-parent the container to the shared overlay ScreenGui (IgnoreGuiInset = true)
+            -- so it escapes any ancestor ClipsDescendants / ScrollingFrame clipping.
+            local overlay = Core.Overlay.Get()
+            self.Container.Parent = overlay
             self.Container.ZIndex = 500
             self.Root.ZIndex      = 100
 
@@ -3308,9 +3329,9 @@ local function BuildUI(Theme)
                 local rPos  = self.Root.AbsolutePosition
                 local rSize = self.Root.AbsoluteSize
                 local screenH = workspace.CurrentCamera.ViewportSize.Y
-                local openUp  = (rPos.Y + rSize.Y - inset + containerH) > screenH
-                local contY   = openUp and (rPos.Y - inset - containerH)
-                                       or  (rPos.Y + rSize.Y - inset)
+                local openUp  = (rPos.Y + rSize.Y + containerH) > screenH
+                local contY   = openUp and (rPos.Y - containerH)
+                                       or  (rPos.Y + rSize.Y)
                 return rPos.X, contY, rSize.X
             end
 
@@ -4335,46 +4356,10 @@ function Announcement.new(opts)
         Parent = titleBar
     })
 
-    -- Draggable title bar
-    do
-        local dragging = false
-        local startInputPos, startContainerPos
-
-        titleBar.InputBegan:Connect(function(input)
-            if input.UserInputType ~= Enum.UserInputType.MouseButton1
-                and input.UserInputType ~= Enum.UserInputType.Touch then return end
-            -- Capture the container's current top-left corner in screen space,
-            -- then switch to AnchorPoint (0,0) so UDim2.fromOffset maps directly
-            -- to screen pixels. This prevents any snapping on drag start.
-            local abs = self.Container.AbsolutePosition
-            self.Container.AnchorPoint = Vector2.new(0, 0)
-            self.Container.Position    = UDim2.fromOffset(abs.X, abs.Y)
-            startInputPos     = Vector2.new(input.Position.X, input.Position.Y)
-            startContainerPos = Vector2.new(abs.X, abs.Y)
-            dragging = true
-        end)
-
-        self._dragConn1 = UserInputService.InputChanged:Connect(function(input)
-            if not dragging then return end
-            if input.UserInputType ~= Enum.UserInputType.MouseMovement
-                and input.UserInputType ~= Enum.UserInputType.Touch then return end
-            local delta = Vector2.new(
-                input.Position.X - startInputPos.X,
-                input.Position.Y - startInputPos.Y
-            )
-            self.Container.Position = UDim2.fromOffset(
-                startContainerPos.X + delta.X,
-                startContainerPos.Y + delta.Y
-            )
-        end)
-
-        self._dragConn2 = UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-                or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = false
-            end
-        end)
-    end
+    -- Draggable title bar — delegate to the library's proven MakeDraggable helper.
+    -- It captures the frame's relative position on mouse-down and applies deltas,
+    -- so the container never snaps to the cursor regardless of AnchorPoint.
+    self._modalDrag = Core.Behaviors.MakeDraggable(titleBar, self.Container)
 
     local messageContainer = Core.Util.Create("Frame", {
         Name = "MessageContainer",
@@ -4530,8 +4515,7 @@ end
 function Announcement:Close()
     if not self.ScreenGui or self._closed then return end
     self._closed = true
-    if self._dragConn1 then self._dragConn1:Disconnect(); self._dragConn1 = nil end
-    if self._dragConn2 then self._dragConn2:Disconnect(); self._dragConn2 = nil end
+    if self._modalDrag then self._modalDrag.Destroy(); self._modalDrag = nil end
 
     local curSize = self.Container.AbsoluteSize
     local targetSize = UDim2.fromOffset(math.max(1, curSize.X * 0.92), math.max(1, curSize.Y * 0.92))
