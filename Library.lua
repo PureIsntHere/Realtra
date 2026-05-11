@@ -1780,7 +1780,7 @@ local function BuildUI(Theme)
         if self._theme.EnableTopSweep then self._fx.topsweep = Core.FX.CreateTopSweep(self.Root, self._theme) end
         if self._theme.EnableGridBG then self._fx.grid = Core.FX.CreateGrid(self.Root, self._theme) end
         
-        self._resizeGrip = Core.Behaviors.AddResizeGrip(self.Root, self._theme, Vector2.new(300, 200), Vector2.new(1200, 800))
+        self._resizeGrip = Core.Behaviors.AddResizeGrip(self.Root, self._theme, Vector2.new(300, 200))
         self._titleDrag = Core.Behaviors.MakeDraggable(self.TitleBar, self.Root)
         
         if Core.Debug then Core.Console.Debug("Window created:", props.Title or "Untitled", "Parent:", self.ScreenGui.Parent:GetFullName()) end
@@ -2593,6 +2593,19 @@ local function BuildUI(Theme)
             self.List.ZIndex    = 101
             self.Options.ZIndex = 102
             updateSectionZIndex(true)
+            -- Auto-scroll the parent ScrollingFrame so the list is fully visible
+            local scrollFrame = self.Root:FindFirstAncestorWhichIsA("ScrollingFrame")
+            if scrollFrame then
+                local listBottom = self.Root.AbsolutePosition.Y + self.Root.AbsoluteSize.Y + maxHeight
+                local viewBottom = scrollFrame.AbsolutePosition.Y + scrollFrame.AbsoluteSize.Y
+                if listBottom > viewBottom then
+                    local overshoot = listBottom - viewBottom + 8
+                    scrollFrame.CanvasPosition = Vector2.new(
+                        scrollFrame.CanvasPosition.X,
+                        scrollFrame.CanvasPosition.Y + overshoot
+                    )
+                end
+            end
         else
             task.delay(0.2, function()
                 if not self._open then
