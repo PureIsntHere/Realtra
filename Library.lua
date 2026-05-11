@@ -2538,37 +2538,30 @@ local function BuildUI(Theme)
         local oldOpen = self._open
         if state ~= nil then self._open = state else self._open = not self._open end
         if self._open == oldOpen then return end
-        
+
         local numOptions = #self._options
         local maxHeight = math.min(numOptions * Core.Layout.ComponentHeight, Core.Layout.ComponentHeight * 5)
-        local size = self._open and UDim2.new(1, 0, 0, maxHeight) or UDim2.new(1, 0, 0, 0)
-        
-        Core.Util.Tween(self.List, {Size = size}, 0.2)
+
         Core.Util.Tween(self.Arrow, {Rotation = self._open and 180 or 0}, 0.2)
-        
-        local function updateSectionZIndex(isOpen)
-            local p = self.Root.Parent
-            if p and p.Name == "Content" then
-                local sectionFrame = p.Parent
-                if sectionFrame and sectionFrame.Name == "Section" then
-                    local count = sectionFrame:GetAttribute("OpenDropdowns") or 0
-                    if isOpen then
-                        count = count + 1
-                    else
-                        count = math.max(0, count - 1)
-                    end
-                    sectionFrame:SetAttribute("OpenDropdowns", count)
-                    sectionFrame.ZIndex = (count > 0) and 100 or 1
-                end
-            end
-        end
 
         if self._open then
-            self.Root.ZIndex = 100
-            self.List.ZIndex = 101
-            self.Options.ZIndex = 102
-            updateSectionZIndex(true)
-            -- Close if the user activates anywhere outside the dropdown bounds.
+            -- Re-parent the list to the ScreenGui so it is never clipped by a
+            -- parent ScrollingFrame's ClipsDescendants boundary.
+            local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
+            local inset = (screenGui and not screenGui.IgnoreGuiInset)
+                and GuiService:GetGuiInset().Y or 0
+            local rootPos  = self.Root.AbsolutePosition
+            local rootSize = self.Root.AbsoluteSize
+
+            if screenGui then
+                self.List.Parent = screenGui
+            end
+            self.List.Position = UDim2.fromOffset(rootPos.X, rootPos.Y + rootSize.Y - inset)
+            self.List.Size     = UDim2.fromOffset(rootSize.X, 0)
+            self.List.ZIndex   = 500
+            self.Options.ZIndex = 501
+            Core.Util.Tween(self.List, {Size = UDim2.fromOffset(rootSize.X, maxHeight)}, 0.2)
+
             if not self._outsideConn then
                 self._outsideConn = UserInputService.InputBegan:Connect(function(input)
                     if not Core.Util.IsActivate(input.UserInputType) then return end
@@ -2589,12 +2582,15 @@ local function BuildUI(Theme)
                 self._outsideConn:Disconnect()
                 self._outsideConn = nil
             end
+            local currentWidth = self.List.AbsoluteSize.X
+            Core.Util.Tween(self.List, {Size = UDim2.fromOffset(currentWidth, 0)}, 0.2)
             task.delay(0.2, function()
                 if not self._open then
-                    self.Root.ZIndex = 1
-                    self.List.ZIndex = 2
+                    self.List.Parent   = self.Root
+                    self.List.Position = UDim2.new(0, 0, 1, 0)
+                    self.List.Size     = UDim2.new(1, 0, 0, 0)
+                    self.List.ZIndex   = 2
                     self.Options.ZIndex = 1
-                    updateSectionZIndex(false)
                 end
             end)
         end
@@ -2630,6 +2626,12 @@ local function BuildUI(Theme)
         if self._outsideConn then
             self._outsideConn:Disconnect()
             self._outsideConn = nil
+        end
+        -- If the list was re-parented to the ScreenGui overlay it won't be
+        -- destroyed when Root is destroyed, so clean it up explicitly.
+        if self.List and self.List.Parent ~= self.Root then
+            pcall(function() self.List:Destroy() end)
+            self.List = nil
         end
         BaseComponent.Destroy(self)
     end
@@ -3261,17 +3263,34 @@ local function BuildUI(Theme)
     
     function ColorPicker:Toggle()
         self._open = not self._open
-        local size = self._open and UDim2.new(1, 0, 0, 170) or UDim2.new(1, 0, 0, 0)
-        Core.Util.Tween(self.Container, { Size = size }, 0.2)
-        
+
         if self._open then
+            -- Re-parent the picker container to the ScreenGui so it is never
+            -- clipped by a parent ScrollingFrame's ClipsDescendants boundary.
+            local screenGui = self.Root:FindFirstAncestorWhichIsA("ScreenGui")
+            local inset = (screenGui and not screenGui.IgnoreGuiInset)
+                and GuiService:GetGuiInset().Y or 0
+            local rootPos  = self.Root.AbsolutePosition
+            local rootSize = self.Root.AbsoluteSize
+
+            if screenGui then
+                self.Container.Parent = screenGui
+            end
+            self.Container.Position = UDim2.fromOffset(rootPos.X, rootPos.Y + rootSize.Y - inset)
+            self.Container.Size     = UDim2.fromOffset(rootSize.X, 0)
+            self.Container.ZIndex   = 500
             self.Root.ZIndex = 100
-            self.Container.ZIndex = 101
+            Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(rootSize.X, 170)}, 0.2)
         else
+            local currentWidth = self.Container.AbsoluteSize.X
+            Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(currentWidth, 0)}, 0.2)
             task.delay(0.2, function()
                 if not self._open then
-                    self.Root.ZIndex = 1
-                    self.Container.ZIndex = 2
+                    self.Container.Parent   = self.Root
+                    self.Container.Position = UDim2.new(0, 0, 1, 0)
+                    self.Container.Size     = UDim2.new(1, 0, 0, 0)
+                    self.Container.ZIndex   = 2
+                    self.Root.ZIndex        = 1
                 end
             end)
         end
@@ -3289,6 +3308,16 @@ local function BuildUI(Theme)
         if containerStroke then containerStroke.Color = self._theme.Border end
         local previewStroke = self.Preview:FindFirstChildOfClass("UIStroke")
         if previewStroke then previewStroke.Color = self._theme.Border end
+    end
+
+    function ColorPicker:Destroy()
+        if self._destroyed then return end
+        -- If the container was re-parented to the ScreenGui overlay, destroy it explicitly.
+        if self.Container and self.Container.Parent ~= self.Root then
+            pcall(function() self.Container:Destroy() end)
+            self.Container = nil
+        end
+        BaseComponent.Destroy(self)
     end
 
     -- Notification
@@ -3466,14 +3495,24 @@ local function BuildUI(Theme)
             Size = UDim2.new(1, 0, 0, 0),
             Position = UDim2.new(0, 0, 0, 28),
             AutomaticSize = Enum.AutomaticSize.Y,
-            BackgroundTransparency = 1,
+            BackgroundColor3 = self._theme.Background,
+            BackgroundTransparency = 0.6,
             ClipsDescendants = false,
             Parent = self.Root
         })
+        Core.Util.Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = self.Content })
+        Core.Util.Create("UIStroke", { Color = self._theme.Border, Thickness = 1, Transparency = 0.5, Parent = self.Content })
         
         Core.Util.Create("UIListLayout", {
             SortOrder = Enum.SortOrder.LayoutOrder,
             Padding = UDim.new(0, 6),
+            Parent = self.Content
+        })
+        Core.Util.Create("UIPadding", {
+            PaddingLeft  = UDim.new(0, 6),
+            PaddingRight = UDim.new(0, 6),
+            PaddingTop   = UDim.new(0, 6),
+            PaddingBottom = UDim.new(0, 6),
             Parent = self.Content
         })
         
@@ -3513,9 +3552,12 @@ local function BuildUI(Theme)
         self.Header.BackgroundColor3 = self._theme.Background2
         self.Header.TextColor3 = self._theme.TextColor
         self.Arrow.TextColor3 = self._theme.TextColor
+        self.Content.BackgroundColor3 = self._theme.Background
         
         local stroke = self.Header:FindFirstChildOfClass("UIStroke")
         if stroke then stroke.Color = self._theme.Border end
+        local contentStroke = self.Content:FindFirstChildOfClass("UIStroke")
+        if contentStroke then contentStroke.Color = self._theme.Border end
         
         for _, comp in ipairs(self._components) do
             if comp.RefreshTheme then
