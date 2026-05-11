@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
 local Core = {
-    Version = "3.2.1",
+    Version = "3.2.2",
     Debug = false
 }
 
@@ -2129,14 +2129,16 @@ local function BuildUI(Theme)
         
         self.Root = Core.Util.Create("Frame", {
             Name = "Label",
-            Size = UDim2.new(1, 0, 0, 26),
+            Size = UDim2.new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
             BackgroundTransparency = 1,
             Parent = props.Parent
         })
         
         self.TextLabel = Core.Util.Create("TextLabel", {
             Name = "Text",
-            Size = UDim2.new(1, -10, 1, 0),
+            Size = UDim2.new(1, -10, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
             Position = UDim2.fromOffset(10, 0),
             BackgroundTransparency = 1,
             Text = props.Text or "Label",
