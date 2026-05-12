@@ -886,7 +886,7 @@ return function()
     function ThemeManager:CreateThemeManager(group)
         assert(self.Library, "ThemeManager: Library not set; call SetLibrary first")
         
-        group:AddDropdown({
+        self._themeDropdown = group:AddDropdown({
             Text     = "Theme",
             Flag     = "ThemeManager_Theme",
             Options  = self:ListThemes(),
