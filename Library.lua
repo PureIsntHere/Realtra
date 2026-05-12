@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
 local Core = {
-    Version = "3.2.3",
+    Version = "3.3.0",
     Debug = false
 }
 
@@ -2798,10 +2798,10 @@ local function BuildUI(Theme)
         Core.Util.Tween(self.Arrow, { Rotation = self._open and 180 or 0 }, 0.2)
 
         if self._open then
-            -- Raise ZIndex so the list renders above all subsequent sections
-            self.Root.ZIndex = 50
+            -- Raise ZIndex so the list renders above everything
+            self.Root.ZIndex = math.huge
             for _, c in ipairs(self.Root:GetDescendants()) do
-                if c:IsA("GuiObject") then c.ZIndex = 50 end
+                if c:IsA("GuiObject") then c.ZIndex = math.huge end
             end
             Core.Util.Tween(self.List, { Size = UDim2.new(1, 0, 0, maxHeight) }, 0.2)
         else
@@ -3477,10 +3477,10 @@ local function BuildUI(Theme)
         local size = self._open and UDim2.new(1, 0, 0, 170) or UDim2.new(1, 0, 0, 0)
         Core.Util.Tween(self.Container, {Size = size}, 0.2)
         if self._open then
-            -- Raise ZIndex so the picker renders above all subsequent sections
-            self.Root.ZIndex = 50
+            -- Raise ZIndex so the picker renders above everything
+            self.Root.ZIndex = math.huge
             for _, c in ipairs(self.Root:GetDescendants()) do
-                if c:IsA("GuiObject") then c.ZIndex = 50 end
+                if c:IsA("GuiObject") then c.ZIndex = math.huge end
             end
         else
             task.delay(0.21, function()
