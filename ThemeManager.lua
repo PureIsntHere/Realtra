@@ -887,9 +887,10 @@ return function()
         assert(self.Library, "ThemeManager: Library not set; call SetLibrary first")
         
         group:AddDropdown({
-            Text = "Theme",
-            Options = self:ListThemes(),
-            Default = "Rose Pine",
+            Text     = "Theme",
+            Flag     = "ThemeManager_Theme",
+            Options  = self:ListThemes(),
+            Value    = "Rose Pine",
             Callback = function(val)
                 self:SetTheme(val)
             end
