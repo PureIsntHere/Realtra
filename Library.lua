@@ -1980,7 +1980,7 @@ local function BuildUI(Theme)
         -- Badge counter: call tab:SetBadge(n) to show a pill; tab:ClearBadge() to hide it
         local _badge = Core.Util.Create("TextLabel", {
             Name = "Badge", Size = UDim2.fromOffset(16, 16),
-            Position = UDim2.new(1, -4, 0, -4), AnchorPoint = Vector2.new(1, 0),
+            Position = UDim2.new(1, -4, 0, 3), AnchorPoint = Vector2.new(1, 0),
             BackgroundColor3 = self._theme.Accent, Text = "",
             TextColor3 = Color3.fromRGB(255, 255, 255), Font = self._theme.Font,
             TextSize = 10, Visible = false, ZIndex = 10, Parent = tabButton,
@@ -2798,52 +2798,20 @@ local function BuildUI(Theme)
         Core.Util.Tween(self.Arrow, { Rotation = self._open and 180 or 0 }, 0.2)
 
         if self._open then
-            -- Reparent list to the shared overlay so it floats above all content
-            local overlay = Core.Overlay.Get()
-            local absPos  = self.Root.AbsolutePosition
-            local absSize = self.Root.AbsoluteSize
-            self.List.Size     = UDim2.fromOffset(absSize.X, 0)
-            self.List.Position = UDim2.fromOffset(absPos.X, absPos.Y + absSize.Y)
-            self.List.Parent   = overlay
-            Core.Util.Tween(self.List, { Size = UDim2.fromOffset(absSize.X, maxHeight) }, 0.2)
-
-            -- Track root position while the dropdown is open (window may be dragged)
-            if self._posTrack then self._posTrack:Disconnect() end
-            self._posTrack = RunService.Heartbeat:Connect(function()
-                if not self._open or self._destroyed or not self.Root or not self.Root.Parent then
-                    if self._posTrack then self._posTrack:Disconnect(); self._posTrack = nil end
-                    return
-                end
-                local ap = self.Root.AbsolutePosition
-                local as = self.Root.AbsoluteSize
-                self.List.Position = UDim2.fromOffset(ap.X, ap.Y + as.Y)
-                self.List.Size     = UDim2.fromOffset(as.X, self.List.Size.Y.Offset)
-            end)
-
-            -- Click-outside-to-close
-            if self._closeConn then self._closeConn:Disconnect() end
-            self._closeConn = UserInputService.InputBegan:Connect(function(input)
-                if not (input.UserInputType == Enum.UserInputType.MouseButton1 or
-                        input.UserInputType == Enum.UserInputType.Touch) then return end
-                if not self._open then return end
-                local mp = UserInputService:GetMouseLocation()
-                local lp, ls = self.List.AbsolutePosition, self.List.AbsoluteSize
-                local rp, rs = self.Root.AbsolutePosition, self.Root.AbsoluteSize
-                local inList = mp.X >= lp.X and mp.X <= lp.X + ls.X and mp.Y >= lp.Y and mp.Y <= lp.Y + ls.Y
-                local inRoot = mp.X >= rp.X and mp.X <= rp.X + rs.X and mp.Y >= rp.Y and mp.Y <= rp.Y + rs.Y
-                if not inList and not inRoot then self:Toggle(false) end
-            end)
+            -- Raise ZIndex so the list renders above all subsequent sections
+            self.Root.ZIndex = 50
+            for _, c in ipairs(self.Root:GetDescendants()) do
+                if c:IsA("GuiObject") then c.ZIndex = 50 end
+            end
+            Core.Util.Tween(self.List, { Size = UDim2.new(1, 0, 0, maxHeight) }, 0.2)
         else
-            local curW = self.List.Size.X.Offset > 0 and self.List.Size.X.Offset or self.Root.AbsoluteSize.X
-            Core.Util.Tween(self.List, { Size = UDim2.fromOffset(curW, 0) }, 0.2)
-            if self._posTrack  then self._posTrack:Disconnect();  self._posTrack  = nil end
-            if self._closeConn then self._closeConn:Disconnect(); self._closeConn = nil end
-            -- Re-parent back after the close animation finishes
+            Core.Util.Tween(self.List, { Size = UDim2.new(1, 0, 0, 0) }, 0.2)
             task.delay(0.21, function()
-                if not self._open and not self._destroyed and self.List then
-                    self.List.Parent   = self.Root
-                    self.List.Size     = UDim2.new(1, 0, 0, 0)
-                    self.List.Position = UDim2.new(0, 0, 1, 0)
+                if not self._open and not self._destroyed then
+                    self.Root.ZIndex = 1
+                    for _, c in ipairs(self.Root:GetDescendants()) do
+                        if c:IsA("GuiObject") then c.ZIndex = 1 end
+                    end
                 end
             end)
         end
@@ -2876,12 +2844,6 @@ local function BuildUI(Theme)
 
     function BaseDropdown:Destroy()
         if self._destroyed then return end
-        if self._posTrack  then self._posTrack:Disconnect();  self._posTrack  = nil end
-        if self._closeConn then self._closeConn:Disconnect(); self._closeConn = nil end
-        -- List may be parented to the overlay if destroyed while open
-        if self.List and self.List.Parent ~= self.Root then
-            pcall(function() self.List:Destroy() end)
-        end
         BaseComponent.Destroy(self)
     end
 
@@ -3512,57 +3474,21 @@ local function BuildUI(Theme)
     
     function ColorPicker:Toggle()
         self._open = not self._open
-        local pickerH = 170
-
+        local size = self._open and UDim2.new(1, 0, 0, 170) or UDim2.new(1, 0, 0, 0)
+        Core.Util.Tween(self.Container, {Size = size}, 0.2)
         if self._open then
-            local overlay = Core.Overlay.Get()
-            local absPos  = self.Preview.AbsolutePosition
-            local absSize = self.Preview.AbsoluteSize
-            local rootW   = self.Root.AbsoluteSize.X
-            -- Align left edge with the Root, open below the preview button row
-            self.Container.Size     = UDim2.fromOffset(rootW, 0)
-            self.Container.Position = UDim2.fromOffset(self.Root.AbsolutePosition.X, absPos.Y + absSize.Y + 2)
-            self.Container.Parent   = overlay
-            Core.Util.Tween(self.Container, { Size = UDim2.fromOffset(rootW, pickerH) }, 0.2)
-
-            -- Track root while open (window drag / scroll)
-            if self._cpPosTrack then self._cpPosTrack:Disconnect() end
-            self._cpPosTrack = RunService.Heartbeat:Connect(function()
-                if not self._open or self._destroyed or not self.Root or not self.Root.Parent then
-                    if self._cpPosTrack then self._cpPosTrack:Disconnect(); self._cpPosTrack = nil end
-                    return
-                end
-                local rp = self.Root.AbsolutePosition
-                local pp = self.Preview.AbsolutePosition
-                local ps = self.Preview.AbsoluteSize
-                self.Container.Position = UDim2.fromOffset(rp.X, pp.Y + ps.Y + 2)
-                self.Container.Size     = UDim2.fromOffset(self.Root.AbsoluteSize.X, self.Container.Size.Y.Offset)
-            end)
-
-            -- Click-outside-to-close
-            if self._cpCloseConn then self._cpCloseConn:Disconnect() end
-            self._cpCloseConn = UserInputService.InputBegan:Connect(function(input)
-                if not (input.UserInputType == Enum.UserInputType.MouseButton1 or
-                        input.UserInputType == Enum.UserInputType.Touch) then return end
-                if not self._open then return end
-                local mp = UserInputService:GetMouseLocation()
-                local cp, cs = self.Container.AbsolutePosition, self.Container.AbsoluteSize
-                local rp, rs = self.Root.AbsolutePosition, self.Root.AbsoluteSize
-                local inContainer = mp.X >= cp.X and mp.X <= cp.X + cs.X and mp.Y >= cp.Y and mp.Y <= cp.Y + cs.Y
-                local inRoot      = mp.X >= rp.X and mp.X <= rp.X + rs.X and mp.Y >= rp.Y and mp.Y <= rp.Y + rs.Y
-                if not inContainer and not inRoot then self:Toggle() end
-            end)
+            -- Raise ZIndex so the picker renders above all subsequent sections
+            self.Root.ZIndex = 50
+            for _, c in ipairs(self.Root:GetDescendants()) do
+                if c:IsA("GuiObject") then c.ZIndex = 50 end
+            end
         else
-            local curW = self.Container.Size.X.Offset > 0 and self.Container.Size.X.Offset or self.Root.AbsoluteSize.X
-            Core.Util.Tween(self.Container, { Size = UDim2.fromOffset(curW, 0) }, 0.2)
-            if self._cpPosTrack  then self._cpPosTrack:Disconnect();  self._cpPosTrack  = nil end
-            if self._cpCloseConn then self._cpCloseConn:Disconnect(); self._cpCloseConn = nil end
-            -- Re-parent back to root after the close animation
             task.delay(0.21, function()
-                if not self._open and not self._destroyed and self.Container then
-                    self.Container.Parent   = self.Root
-                    self.Container.Size     = UDim2.new(1, 0, 0, 0)
-                    self.Container.Position = UDim2.new(0, 0, 1, 0)
+                if not self._open and not self._destroyed then
+                    self.Root.ZIndex = 1
+                    for _, c in ipairs(self.Root:GetDescendants()) do
+                        if c:IsA("GuiObject") then c.ZIndex = 1 end
+                    end
                 end
             end)
         end
@@ -3584,12 +3510,6 @@ local function BuildUI(Theme)
 
     function ColorPicker:Destroy()
         if self._destroyed then return end
-        if self._cpPosTrack  then self._cpPosTrack:Disconnect();  self._cpPosTrack  = nil end
-        if self._cpCloseConn then self._cpCloseConn:Disconnect(); self._cpCloseConn = nil end
-        -- Container may be in the overlay if destroyed while open
-        if self.Container and self.Container.Parent ~= self.Root then
-            pcall(function() self.Container:Destroy() end)
-        end
         BaseComponent.Destroy(self)
     end
 
