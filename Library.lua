@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
 local Core = {
-    Version = "3.2.2",
+    Version = "3.2.3",
     Debug = false
 }
 
@@ -1541,6 +1541,7 @@ local function BuildUI(Theme)
         end
     end
     function BaseComponent:_fire(...)
+        if self._enabled == false then return end
         if not self._callback then return end
         local ok, err = pcall(self._callback, ...)
         if not ok and Core.Debug then
@@ -1550,6 +1551,31 @@ local function BuildUI(Theme)
     function BaseComponent:SetVisible(visible)
         self._visible = visible
         if self.Root then self.Root.Visible = visible end
+    end
+    function BaseComponent:SetEnabled(enabled)
+        self._enabled = (enabled ~= false)
+        if not self.Root then return end
+        if not self._enabled then
+            if not self._disabledOverlay then
+                local ov = Instance.new("Frame")
+                ov.Name = "_DisabledOverlay"
+                ov.Size = UDim2.fromScale(1, 1)
+                ov.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                ov.BackgroundTransparency = 0.6
+                ov.ZIndex = 999
+                ov.BorderSizePixel = 0
+                ov.Parent = self.Root
+                self._disabledOverlay = ov
+            end
+            self._disabledOverlay.Visible = true
+        else
+            if self._disabledOverlay then
+                self._disabledOverlay.Visible = false
+            end
+        end
+    end
+    function BaseComponent:IsEnabled()
+        return self._enabled ~= false
     end
     function BaseComponent:RefreshTheme() end
 
@@ -1566,6 +1592,7 @@ local function BuildUI(Theme)
         self._width = Core.Layout.DockWidth
         self._threshold = 0.8
         self._connections = {}
+        self._showTabsWithDock = false
         
         self:_createDock()
         self:_setupWindowConnections()
@@ -1578,28 +1605,44 @@ local function BuildUI(Theme)
         local width = self._width
         local mainPos = self._window.Root.AbsolutePosition
         local mainSize = self._window.Root.AbsoluteSize
-        local margin = 8
-        local initX = (mainPos.X >= (width + margin)) and (mainPos.X - width - margin) or (mainPos.X + mainSize.X + margin)
+        -- Container sits flush against the left edge of the main window
+        local initX = mainPos.X - width
         local initY = mainPos.Y
 
-        self.Container = Core.Util.Create("Frame", { Name = "DockContainer", Size = UDim2.fromOffset(0, mainSize.Y), Position = UDim2.fromOffset(initX, initY), BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 100, Parent = self._parent })
-        self.Dock = Core.Util.Create("Frame", { Name = "Dock", Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0), BackgroundColor3 = self._theme.Background2, BorderSizePixel = 0, ZIndex = 1, Parent = self.Container })
+        -- Container: full width, ClipsDescendants hides the Dock during slide
+        self.Container = Core.Util.Create("Frame", { Name = "DockContainer", Size = UDim2.fromOffset(width, mainSize.Y), Position = UDim2.fromOffset(initX, initY), BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 100, Parent = self._parent })
+        -- Dock starts tucked to the right (hidden); Show() slides it left into view
+        self.Dock = Core.Util.Create("Frame", { Name = "Dock", Size = UDim2.new(1, 0, 1, 0), Position = UDim2.fromOffset(width, 0), BackgroundColor3 = self._theme.Background2, BorderSizePixel = 0, ZIndex = 1, Visible = false, Parent = self.Container })
+        -- Right border connects the dock to the main window
         Core.Util.Create("Frame", { Name = "RightBorder", Size = UDim2.new(0, 1, 1, 0), Position = UDim2.new(1, -1, 0, 0), BackgroundColor3 = self._theme.Border, BorderSizePixel = 0, Parent = self.Dock })
-        
+
         local dockHeader = Core.Util.Create("Frame", { Name = "Header", Size = UDim2.new(1, 0, 0, Core.Layout.DockHeaderHeight), BackgroundColor3 = self._theme.Background, BorderSizePixel = 0, Parent = self.Dock })
         Core.Util.Create("TextLabel", { Name = "Title", Size = UDim2.new(1, -16, 1, 0), Position = UDim2.fromOffset(8, 0), BackgroundTransparency = 1, Text = "TABS", TextColor3 = self._theme.TextColor, Font = self._theme.Font, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = dockHeader })
-        
-        self.SnapBtn = Core.Util.Create("TextButton", { Name = "SnapButton", Size = UDim2.fromOffset(60, 22), Position = UDim2.new(1, -66, 0.5, -11), BackgroundColor3 = self._theme.Background2, Text = "Snap", TextColor3 = self._theme.TextColor, Font = self._theme.Font, TextSize = 12, AutoButtonColor = true, Parent = dockHeader })
+
+        self.SnapBtn = Core.Util.Create("TextButton", { Name = "SnapButton", Size = UDim2.fromOffset(48, 22), Position = UDim2.new(1, -54, 0.5, -11), BackgroundColor3 = self._theme.Background2, Text = "Snap", TextColor3 = self._theme.TextColor, Font = self._theme.Font, TextSize = 12, AutoButtonColor = true, Parent = dockHeader })
         Core.Util.Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = self.SnapBtn })
         self.SnapBtn.InputBegan:Connect(function(input) if Core.Util.IsActivate(input.UserInputType) then self:SetSnapped(not self._snapped) end end)
-        
+
+        -- "Tabs" button: toggles whether the main window tab bar stays visible while the dock is open
+        self.TabsBtn = Core.Util.Create("TextButton", { Name = "TabsButton", Size = UDim2.fromOffset(40, 22), Position = UDim2.new(1, -100, 0.5, -11), BackgroundColor3 = self._theme.Background2, Text = "Tabs", TextColor3 = self._theme.SubTextColor, Font = self._theme.Font, TextSize = 12, AutoButtonColor = true, Parent = dockHeader })
+        Core.Util.Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = self.TabsBtn })
+        self.TabsBtn.InputBegan:Connect(function(input)
+            if Core.Util.IsActivate(input.UserInputType) then
+                self._showTabsWithDock = not self._showTabsWithDock
+                self:_updateTabBarVisibility()
+                self:UpdateTabsButton()
+                self:_saveState()
+            end
+        end)
+
         self.Content = Core.Util.Create("ScrollingFrame", { Name = "Content", Size = UDim2.new(1, -8, 1, -(Core.Layout.DockHeaderHeight + 8)), Position = UDim2.fromOffset(4, Core.Layout.DockHeaderHeight + 4), BackgroundTransparency = 1, ScrollBarThickness = (self._theme.Scrollbar and self._theme.Scrollbar.Thickness) or 2, ScrollBarImageColor3 = (self._theme.Scrollbar and self._theme.Scrollbar.Color) or self._theme.Border, BorderSizePixel = 0, Parent = self.Dock })
         Core.Util.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4), Parent = self.Content })
         Core.Util.Create("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), PaddingTop = UDim.new(0, 4), Parent = self.Content })
-        
+
         self:_setupDrag(dockHeader)
         self._resizeGrip = Core.Behaviors.AddResizeGrip(self.Container, self._theme, Vector2.new(120, 120), Vector2.new(800, 900))
         self:UpdateSnapButton()
+        self:UpdateTabsButton()
     end
     
     function Docking:_setupDrag(header)
@@ -1643,19 +1686,28 @@ local function BuildUI(Theme)
     
     function Docking:Show()
         if not self.Container then return end
-        if self._snapped then self:_repositionToWindow(); self.Container.Size = UDim2.fromOffset(0, self._window.Root.AbsoluteSize.Y)
-        else self.Container.Size = UDim2.fromOffset(0, self.Container.AbsoluteSize.Y) end
-        self.Dock.BackgroundTransparency = 1
-        Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(self._width, self.Container.Size.Y.Offset)}, 0.25)
-        Core.Util.Tween(self.Dock, {BackgroundTransparency = 0}, 0.25)
+        if self._snapped then self:_repositionToWindow() end
+        local w = math.max(self.Container.AbsoluteSize.X, self._width)
+        -- Slide Dock in from the right (right → left)
+        self.Dock.Position = UDim2.fromOffset(w, 0)
+        self.Dock.Visible = true
+        if self._resizeGrip and self._resizeGrip.Grip then self._resizeGrip.Grip.Visible = true end
+        Core.Util.Tween(self.Dock, {Position = UDim2.fromOffset(0, 0)}, 0.25)
         self._visible = true
+        self:_updateTabBarVisibility()
     end
     
     function Docking:Hide()
         if not self.Container then return end
-        Core.Util.Tween(self.Container, {Size = UDim2.fromOffset(0, self.Container.Size.Y.Offset)}, 0.25)
-        Core.Util.Tween(self.Dock, {BackgroundTransparency = 1}, 0.25)
+        local w = math.max(self.Container.AbsoluteSize.X, self._width)
+        -- Slide Dock out to the right (left → right)
+        Core.Util.Tween(self.Dock, {Position = UDim2.fromOffset(w, 0)}, 0.25)
         self._visible = false
+        if self._resizeGrip and self._resizeGrip.Grip then self._resizeGrip.Grip.Visible = false end
+        task.delay(0.26, function()
+            if self.Dock and not self._visible then self.Dock.Visible = false end
+        end)
+        self:_updateTabBarVisibility()
     end
     
     function Docking:SetSnapped(snapped)
@@ -1669,11 +1721,28 @@ local function BuildUI(Theme)
         self.SnapBtn.Text = self._snapped and "UnSnap" or "Snap"
         self.SnapBtn.BackgroundColor3 = self._snapped and self._theme.Accent or self._theme.Background2
     end
-    
+
+    function Docking:UpdateTabsButton()
+        if not self.TabsBtn then return end
+        self.TabsBtn.BackgroundColor3 = self._showTabsWithDock and self._theme.Accent or self._theme.Background2
+        self.TabsBtn.TextColor3 = self._showTabsWithDock and self._theme.TextColor or self._theme.SubTextColor
+    end
+
+    function Docking:_updateTabBarVisibility()
+        local win = self._window
+        if not win or not win.TabContainer then return end
+        local shouldShow = not self._visible or self._showTabsWithDock
+        if win.TabContainer.Visible ~= shouldShow then
+            win.TabContainer.Visible = shouldShow
+            win:_updateContentPosition()
+        end
+    end
+
     function Docking:_repositionToWindow()
-        local winPos = self._window.Root.AbsolutePosition
+        local winPos  = self._window.Root.AbsolutePosition
+        local winSize = self._window.Root.AbsoluteSize
         self.Container.Position = UDim2.fromOffset(winPos.X - self._width, winPos.Y)
-        self.Container.Size = UDim2.fromOffset(self._width, self._window.Root.AbsoluteSize.Y)
+        self.Container.Size = UDim2.fromOffset(self._width, winSize.Y)
     end
     
     function Docking:_setupWindowConnections()
@@ -1717,6 +1786,9 @@ local function BuildUI(Theme)
                 self.SnapBtn.BackgroundColor3 = self._snapped and self._theme.Accent or self._theme.Background2
                 self.SnapBtn.TextColor3 = self._theme.TextColor
             end
+            if self.TabsBtn then
+                self:UpdateTabsButton()
+            end
         end
         
         if self._resizeGrip and self._resizeGrip.UpdateColors then
@@ -1729,7 +1801,8 @@ local function BuildUI(Theme)
         pcall(function()
             if not isfolder("dock") then makefolder("dock") end
             writefile("dock/state.json", HttpService:JSONEncode({
-                visible = self._visible, snapped = self._snapped, width = self._width
+                visible = self._visible, snapped = self._snapped, width = self._width,
+                showTabsWithDock = self._showTabsWithDock
             }))
         end)
     end
@@ -1743,8 +1816,10 @@ local function BuildUI(Theme)
         if ok and data then
             self._snapped = data.snapped or false
             self._width = data.width or 150
+            self._showTabsWithDock = data.showTabsWithDock or false
             if data.visible then self:Show() else self:Hide() end
             self:UpdateSnapButton()
+            self:UpdateTabsButton()
         end
     end
 
@@ -1790,7 +1865,7 @@ local function BuildUI(Theme)
     function Window:_createTitleBar(title, subtitle)
         self.TitleBar = Core.Util.Create("Frame", { Name = "TitleBar", Size = UDim2.new(1, 0, 0, Core.Layout.HeaderHeight), BackgroundColor3 = self._theme.Window.Background, Parent = self.Root })
         self.Title = Core.Util.Create("TextLabel", { Name = "Title", Size = UDim2.new(1, -16, 1, 0), Position = UDim2.fromOffset(8, 0), BackgroundTransparency = 1, Text = title or "Window", TextColor3 = self._theme.Window.TitleText, TextXAlignment = Enum.TextXAlignment.Left, Font = self._theme.Font, TextSize = 14, Parent = self.TitleBar })
-        if subtitle then self.Subtitle = Core.Util.Create("TextLabel", { Name = "Subtitle", Size = UDim2.new(1, -16, 1, 0), Position = UDim2.fromOffset(8, 0), BackgroundTransparency = 1, Text = subtitle, TextColor3 = self._theme.Window.SubtitleText, TextXAlignment = Enum.TextXAlignment.Right, Font = self._theme.Font, TextSize = 14, Parent = self.TitleBar }) end
+        if subtitle then self.Subtitle = Core.Util.Create("TextLabel", { Name = "Subtitle", Size = UDim2.new(1, -38, 1, 0), Position = UDim2.fromOffset(8, 0), BackgroundTransparency = 1, Text = subtitle, TextColor3 = self._theme.Window.SubtitleText, TextXAlignment = Enum.TextXAlignment.Right, Font = self._theme.Font, TextSize = 14, Parent = self.TitleBar }) end
         
         self.DockIcon = Core.Util.Create("TextButton", { Name = "DockIcon", Size = UDim2.fromOffset(20, 20), Position = UDim2.new(1, -26, 0.5, -10), BackgroundColor3 = Color3.new(), BackgroundTransparency = 1, BorderSizePixel = 0, Text = "≡", TextColor3 = self._theme.Window and self._theme.Window.TitleText or self._theme.TextColor, TextScaled = false, TextSize = 16, Font = Enum.Font.SourceSans, Parent = self.TitleBar })
         Core.Util.Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = self.DockIcon })
@@ -1811,7 +1886,8 @@ local function BuildUI(Theme)
             self.Content.Size = UDim2.new(1, 0, 1, -(Core.Layout.HeaderHeight + self._theme.Tab.PillHeight))
             self.Content.Position = UDim2.fromOffset(0, Core.Layout.HeaderHeight + self._theme.Tab.PillHeight)
             self.TabList = Core.Util.Create("Frame", { Name = "TabList", Size = UDim2.new(0, 0, 1, 0), BackgroundTransparency = 1, ClipsDescendants = true, Parent = self.TabContainer })
-            self.Pages = Core.Util.Create("Frame", { Name = "Pages", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = self.Content })
+            self.Pages = Core.Util.Create("Frame", { Name = "Pages", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ClipsDescendants = true, Parent = self.Content })
+            self._tabCover = Core.Util.Create("Frame", { Name = "TabCover", Size = UDim2.fromScale(1, 1), BackgroundColor3 = self._theme.Background, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 50, Parent = self.Pages })
             self._tabs = {}
             self._currentTab = nil
             
@@ -1866,6 +1942,11 @@ local function BuildUI(Theme)
         
         if self._currentTab then
             local current = self._currentTab
+            -- Brief flash-fade to smooth the page switch
+            if self._tabCover then
+                self._tabCover.BackgroundTransparency = 0.15
+                TweenService:Create(self._tabCover, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+            end
             current.Button.BackgroundColor3 = self._theme.Tab.IdleFill
             current.Button.TextColor3 = self._theme.Tab.IdleText
             if current.Icon then current.Button.Icon.ImageColor3 = self._theme.Tab.IdleText end
@@ -2180,6 +2261,9 @@ local function BuildUI(Theme)
 
         local self = BaseComponent.new({ Name = "Button", Theme = props.Theme or Theme, Tooltip = props.Tooltip })
         setmetatable(self, Button)
+        self._idleColor  = self._theme.Background2
+        self._hoverColor = self._theme.Accent
+        self._variant    = "default"
         self.Root = Core.Util.Create("TextButton", { Name = "Button", Size = UDim2.new(1, 0, 0, Core.Layout.ButtonHeight), BackgroundColor3 = self._theme.Background2, Text = props.Text or "Button", TextColor3 = self._theme.TextColor, Font = self._theme.Font, TextSize = 14, BorderSizePixel = 0, Parent = props.Parent })
         
         -- Add UIStroke
@@ -2203,10 +2287,10 @@ local function BuildUI(Theme)
     end
     function Button:_setupInteractions()
         self.Root.MouseEnter:Connect(function()
-            Core.Util.Tween(self.Root, { BackgroundColor3 = self._theme.Accent }, 0.2)
+            Core.Util.Tween(self.Root, { BackgroundColor3 = self._hoverColor }, 0.2)
         end)
         self.Root.MouseLeave:Connect(function()
-            Core.Util.Tween(self.Root, { BackgroundColor3 = self._theme.Background2 }, 0.2)
+            Core.Util.Tween(self.Root, { BackgroundColor3 = self._idleColor }, 0.2)
         end)
         self.Root.InputBegan:Connect(function(input)
             if Core.Util.IsActivate(input.UserInputType) then
@@ -2215,12 +2299,31 @@ local function BuildUI(Theme)
         end)
     end
     function Button:SetText(text) self.Root.Text = text end
+    function Button:SetVariant(variant)
+        local VARIANT = {
+            danger  = { idle = Color3.fromRGB(155, 50,  50),  hover = Color3.fromRGB(195, 65,  65)  },
+            success = { idle = Color3.fromRGB(45,  125, 65),  hover = Color3.fromRGB(55,  155, 80)  },
+            warning = { idle = Color3.fromRGB(155, 115, 30),  hover = Color3.fromRGB(190, 145, 40)  },
+        }
+        self._variant = variant or "default"
+        local c = VARIANT[self._variant]
+        if c then
+            self._idleColor  = c.idle
+            self._hoverColor = c.hover
+        else
+            self._idleColor  = self._theme.Background2
+            self._hoverColor = self._theme.Accent
+        end
+        self.Root.BackgroundColor3 = self._idleColor
+    end
     function Button:RefreshTheme()
         if self._destroyed then return end
-        self.Root.BackgroundColor3 = self._theme.Background2
+        if not self._variant or self._variant == "default" then
+            self._idleColor  = self._theme.Background2
+            self._hoverColor = self._theme.Accent
+        end
+        self.Root.BackgroundColor3 = self._idleColor
         self.Root.TextColor3 = self._theme.TextColor
-        
-        -- Update border stroke
         local stroke = self.Root:FindFirstChildOfClass("UIStroke")
         if stroke then stroke.Color = self._theme.Border end
     end
@@ -3372,7 +3475,7 @@ local function BuildUI(Theme)
     Notification = setmetatable({}, {__index = BaseComponent})
     Notification.__index = Notification
     function Notification.new(props)
-        local self = BaseComponent.new({ Name = "Notification", Theme = props.Theme or Theme })
+        local self = BaseComponent.new({ Name = "Notification", Theme = props.Theme or Core.Theme })
         setmetatable(self, Notification)
 
         self._position = props.Position or "TopRight"
@@ -4528,7 +4631,7 @@ end
 
 function Library:Notify(opts)
     return UI.Notification.new({
-        Theme = self.Theme,
+        Theme = Core.Theme,
         Title = opts.Title,
         Text = opts.Text,
         Duration = opts.Duration,
