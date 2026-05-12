@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
 local Core = {
-    Version = "3.3.1",
+    Version = "3.3.2",
     Debug = false
 }
 
@@ -41,20 +41,13 @@ Core.Layout = {
     ButtonHeight = 32,
 }
 
--- Global ZIndex layer order (requires ZIndexBehavior.Global on the ScreenGui).
--- Use increments of 100 so intermediate layers can be inserted later.
+-- ZIndex values for dynamic layering (ZIndexBehavior.Sibling).
+-- On open, the dropdown/picker boosts its ancestor section above siblings.
 Core.ZIndex = {
-    Window       = 100,  -- Window root frame
-    TitleBar     = 110,  -- Title bar
-    TabBar       = 120,  -- Tab scroll container
-    Content      = 130,  -- Main content area
-    Pages        = 140,  -- Pages container
-    Page         = 150,  -- Individual tab page
-    TabCover     = 160,  -- Tab-switch animation cover
-    Section      = 200,  -- Section root
-    Component    = 300,  -- Buttons, toggles, sliders, inputs, etc.
-    DropdownOpen = 400,  -- Dropdown list / ColorPicker panel when expanded
-    Tooltip      = 800,  -- Tooltip overlay
+    TabCover     = 50,   -- tab-switch animation cover (within Pages)
+    Badge        = 10,   -- tab badge pill (within tab button)
+    Dropdown     = 999,  -- raised on Root + ancestor section when dropdown/picker is open
+    Tooltip      = 1000, -- tooltip layer (within its own ScreenGui)
 }
 
 Core.TweenCache = {
@@ -1904,7 +1897,7 @@ local function BuildUI(Theme)
         self._components = {}
         self.Docking = nil
         
-        self.ScreenGui = Core.Util.Create("ScreenGui", { Name = Core.Safety.RandomString(16), ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Global, Parent = Core.Safety.GetRoot() })
+        self.ScreenGui = Core.Util.Create("ScreenGui", { Name = Core.Safety.RandomString(16), ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = Core.Safety.GetRoot() })
         self.ScreenGui:SetAttribute("__g", true)
         Core.Safety.ProtectInstance(self.ScreenGui)
         
@@ -1918,7 +1911,7 @@ local function BuildUI(Theme)
             local ok, inset = pcall(function() return GuiService:GetGuiInset() end)
             if ok and inset then _insetY = inset.Y end
         end
-        self.Root = Core.Util.Create("Frame", { Name = "Window", Size = UDim2.fromOffset(props.Width or (props.Size and props.Size.X) or _defW, props.Height or (props.Size and props.Size.Y) or _defH), Position = UDim2.new(0.5, 0, 0.5, _insetY), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = self._theme.Window.Background, BorderSizePixel = 0, ZIndex = Core.ZIndex.Window, Parent = self.ScreenGui })
+        self.Root = Core.Util.Create("Frame", { Name = "Window", Size = UDim2.fromOffset(props.Width or (props.Size and props.Size.X) or _defW, props.Height or (props.Size and props.Size.Y) or _defH), Position = UDim2.new(0.5, 0, 0.5, _insetY), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = self._theme.Window.Background, BorderSizePixel = 0, Parent = self.ScreenGui })
         Core.Util.Create("UIStroke", { Color = self._theme.Window.Border or self._theme.Border, Thickness = 1, Parent = self.Root })
 
         self:_createTitleBar(props.Title, props.SubTitle)
@@ -1936,7 +1929,7 @@ local function BuildUI(Theme)
     end
     
     function Window:_createTitleBar(title, subtitle)
-        self.TitleBar = Core.Util.Create("Frame", { Name = "TitleBar", Size = UDim2.new(1, 0, 0, Core.Layout.HeaderHeight), BackgroundColor3 = self._theme.Window.Background, ZIndex = Core.ZIndex.TitleBar, Parent = self.Root })
+        self.TitleBar = Core.Util.Create("Frame", { Name = "TitleBar", Size = UDim2.new(1, 0, 0, Core.Layout.HeaderHeight), BackgroundColor3 = self._theme.Window.Background, Parent = self.Root })
         self.Title = Core.Util.Create("TextLabel", { Name = "Title", Size = UDim2.new(1, -16, 1, 0), Position = UDim2.fromOffset(8, 0), BackgroundTransparency = 1, Text = title or "Window", TextColor3 = self._theme.Window.TitleText, TextXAlignment = Enum.TextXAlignment.Left, Font = self._theme.Font, TextSize = 14, Parent = self.TitleBar })
         if subtitle then self.Subtitle = Core.Util.Create("TextLabel", { Name = "Subtitle", Size = UDim2.new(1, -62, 1, 0), Position = UDim2.fromOffset(8, 0), BackgroundTransparency = 1, Text = subtitle, TextColor3 = self._theme.Window.SubtitleText, TextXAlignment = Enum.TextXAlignment.Right, Font = self._theme.Font, TextSize = 14, Parent = self.TitleBar }) end
         
@@ -1955,17 +1948,17 @@ local function BuildUI(Theme)
     end
     
     function Window:_createContentArea()
-        self.Content = Core.Util.Create("Frame", { Name = "Content", Size = UDim2.new(1, 0, 1, -Core.Layout.HeaderHeight), Position = UDim2.fromOffset(0, Core.Layout.HeaderHeight), BackgroundColor3 = self._theme.Background, ZIndex = Core.ZIndex.Content, Parent = self.Root })
+        self.Content = Core.Util.Create("Frame", { Name = "Content", Size = UDim2.new(1, 0, 1, -Core.Layout.HeaderHeight), Position = UDim2.fromOffset(0, Core.Layout.HeaderHeight), BackgroundColor3 = self._theme.Background, Parent = self.Root })
     end
     function Window:AddTab(name, icon)
         if self._destroyed then return end
         if not self.TabContainer then
-            self.TabContainer = Core.Util.Create("ScrollingFrame", { Name = "TabContainer", Size = UDim2.new(1, 0, 0, self._theme.Tab.PillHeight), Position = UDim2.fromOffset(0, Core.Layout.HeaderHeight), BackgroundColor3 = self._theme.Background, BackgroundTransparency = 0, BorderSizePixel = 0, ClipsDescendants = true, ScrollBarThickness = (self._theme.Scrollbar and self._theme.Scrollbar.Thickness) or 2, ScrollBarImageColor3 = (self._theme.Scrollbar and self._theme.Scrollbar.Color) or self._theme.Border, ScrollingDirection = Enum.ScrollingDirection.X, CanvasSize = UDim2.fromOffset(0, self._theme.Tab.PillHeight), ZIndex = Core.ZIndex.TabBar, Parent = self.Root })
+            self.TabContainer = Core.Util.Create("ScrollingFrame", { Name = "TabContainer", Size = UDim2.new(1, 0, 0, self._theme.Tab.PillHeight), Position = UDim2.fromOffset(0, Core.Layout.HeaderHeight), BackgroundColor3 = self._theme.Background, BackgroundTransparency = 0, BorderSizePixel = 0, ClipsDescendants = true, ScrollBarThickness = (self._theme.Scrollbar and self._theme.Scrollbar.Thickness) or 2, ScrollBarImageColor3 = (self._theme.Scrollbar and self._theme.Scrollbar.Color) or self._theme.Border, ScrollingDirection = Enum.ScrollingDirection.X, CanvasSize = UDim2.fromOffset(0, self._theme.Tab.PillHeight), Parent = self.Root })
             Core.Util.Create("UIStroke", { Color = self._theme.Border, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = self.TabContainer })
             self.Content.Size = UDim2.new(1, 0, 1, -(Core.Layout.HeaderHeight + self._theme.Tab.PillHeight))
             self.Content.Position = UDim2.fromOffset(0, Core.Layout.HeaderHeight + self._theme.Tab.PillHeight)
             self.TabList = Core.Util.Create("Frame", { Name = "TabList", Size = UDim2.new(0, 0, 1, 0), BackgroundTransparency = 1, ClipsDescendants = true, Parent = self.TabContainer })
-            self.Pages = Core.Util.Create("Frame", { Name = "Pages", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = Core.ZIndex.Pages, Parent = self.Content })
+            self.Pages = Core.Util.Create("Frame", { Name = "Pages", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ClipsDescendants = true, Parent = self.Content })
             self._tabCover = Core.Util.Create("Frame", { Name = "TabCover", Size = UDim2.fromScale(1, 1), BackgroundColor3 = self._theme.Background, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = Core.ZIndex.TabCover, Parent = self.Pages })
             self._tabs = {}
             self._currentTab = nil
@@ -1982,7 +1975,7 @@ local function BuildUI(Theme)
         local textSize = TextService:GetTextSize(tabButton.Text, 14, self._theme.Font, Vector2.new(1000, 20))
         tabButton.Size = UDim2.new(0, textSize.X + 24, 1, 0)
         
-        local page = Core.Util.Create("ScrollingFrame", { Name = name .. "Page", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ScrollBarThickness = (self._theme.Scrollbar and self._theme.Scrollbar.Thickness) or 2, ScrollBarImageColor3 = (self._theme.Scrollbar and self._theme.Scrollbar.Color) or self._theme.Border, Visible = false, ZIndex = Core.ZIndex.Page, Parent = self.Pages })
+        local page = Core.Util.Create("ScrollingFrame", { Name = name .. "Page", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ScrollBarThickness = (self._theme.Scrollbar and self._theme.Scrollbar.Thickness) or 2, ScrollBarImageColor3 = (self._theme.Scrollbar and self._theme.Scrollbar.Color) or self._theme.Border, Visible = false, Parent = self.Pages })
         Core.Util.Create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), Parent = page })
         local layout = Core.Util.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6), Parent = page })
         
@@ -1999,7 +1992,7 @@ local function BuildUI(Theme)
             Position = UDim2.new(1, -4, 0, 3), AnchorPoint = Vector2.new(1, 0),
             BackgroundColor3 = self._theme.Accent, Text = "",
             TextColor3 = Color3.fromRGB(255, 255, 255), Font = self._theme.Font,
-            TextSize = 10, Visible = false, ZIndex = Core.ZIndex.TabBar + 5, Parent = tabButton,
+            TextSize = 10, Visible = false, ZIndex = Core.ZIndex.Badge, Parent = tabButton,
         })
         Core.Util.Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = _badge })
         tab._badge = _badge
@@ -2352,7 +2345,6 @@ local function BuildUI(Theme)
             Size = UDim2.new(1, 0, 0, 0),
             AutomaticSize = Enum.AutomaticSize.Y,
             BackgroundTransparency = 1,
-            ZIndex = Core.ZIndex.Component,
             Parent = props.Parent
         })
         
@@ -2404,7 +2396,7 @@ local function BuildUI(Theme)
         self._idleColor  = self._theme.Background2
         self._hoverColor = self._theme.Accent
         self._variant    = "default"
-        self.Root = Core.Util.Create("TextButton", { Name = "Button", Size = UDim2.new(1, 0, 0, Core.Layout.ButtonHeight), BackgroundColor3 = self._theme.Background2, Text = props.Text or "Button", TextColor3 = self._theme.TextColor, Font = self._theme.Font, TextSize = 14, BorderSizePixel = 0, ZIndex = Core.ZIndex.Component, Parent = props.Parent })
+        self.Root = Core.Util.Create("TextButton", { Name = "Button", Size = UDim2.new(1, 0, 0, Core.Layout.ButtonHeight), BackgroundColor3 = self._theme.Background2, Text = props.Text or "Button", TextColor3 = self._theme.TextColor, Font = self._theme.Font, TextSize = 14, BorderSizePixel = 0, Parent = props.Parent })
         
         -- Add UIStroke
         Core.Util.Create("UIStroke", {
@@ -2482,7 +2474,7 @@ local function BuildUI(Theme)
 
         local self = BaseComponent.new({ Name = "Toggle", Theme = props.Theme or Theme, Tooltip = props.Tooltip })
         setmetatable(self, Toggle)
-        self.Root = Core.Util.Create("Frame", { Name = "Toggle", Size = UDim2.new(1, 0, 0, Core.Layout.ComponentHeight), BackgroundTransparency = 1, ZIndex = Core.ZIndex.Component, Parent = props.Parent })
+        self.Root = Core.Util.Create("Frame", { Name = "Toggle", Size = UDim2.new(1, 0, 0, Core.Layout.ComponentHeight), BackgroundTransparency = 1, Parent = props.Parent })
         self:_createLabel(props.Text)
         self:_createIndicator()
         self._value = props.Value or false
@@ -2562,7 +2554,7 @@ local function BuildUI(Theme)
 
         local self = BaseComponent.new({ Name = "Slider", Theme = props.Theme or Theme, Tooltip = props.Tooltip })
         setmetatable(self, Slider)
-        self.Root = Core.Util.Create("Frame", { Name = "Slider", Size = UDim2.new(1, 0, 0, Core.Layout.SliderHeight), BackgroundTransparency = 1, ZIndex = Core.ZIndex.Component, Parent = props.Parent })
+        self.Root = Core.Util.Create("Frame", { Name = "Slider", Size = UDim2.new(1, 0, 0, Core.Layout.SliderHeight), BackgroundTransparency = 1, Parent = props.Parent })
         self:_createLabel(props.Text)
         self:_createTrack()
         self:_createValue()
@@ -2674,7 +2666,7 @@ local function BuildUI(Theme)
 
         local self = BaseComponent.new({ Name = "TextInput", Theme = props.Theme or Theme, Tooltip = props.Tooltip })
         setmetatable(self, TextInput)
-        self.Root = Core.Util.Create("Frame", { Name = "TextInput", Size = UDim2.new(1, 0, 0, Core.Layout.ComponentHeight), BackgroundColor3 = self._theme.Background2, BorderSizePixel = 0, ZIndex = Core.ZIndex.Component, Parent = props.Parent })
+        self.Root = Core.Util.Create("Frame", { Name = "TextInput", Size = UDim2.new(1, 0, 0, Core.Layout.ComponentHeight), BackgroundColor3 = self._theme.Background2, BorderSizePixel = 0, Parent = props.Parent })
         
         -- Add UIStroke
         Core.Util.Create("UIStroke", {
@@ -2777,7 +2769,7 @@ local function BuildUI(Theme)
     function BaseDropdown.new(props)
         local self = BaseComponent.new({ Name = props.Name or "Dropdown", Theme = props.Theme, Tooltip = props.Tooltip })
         setmetatable(self, BaseDropdown)
-        self.Root = Core.Util.Create("Frame", { Name = self.Name, Size = UDim2.new(1, 0, 0, Core.Layout.ComponentHeight), BackgroundColor3 = self._theme.Background2, BorderSizePixel = 0, ZIndex = Core.ZIndex.Component, Parent = props.Parent })
+        self.Root = Core.Util.Create("Frame", { Name = self.Name, Size = UDim2.new(1, 0, 0, Core.Layout.ComponentHeight), BackgroundColor3 = self._theme.Background2, BorderSizePixel = 0, Parent = props.Parent })
         Core.Util.Create("UIStroke", { Color = self._theme.Border, Thickness = 1, Parent = self.Root })
         
         self._parent = props.Parent
@@ -2797,7 +2789,7 @@ local function BuildUI(Theme)
     end
     
     function BaseDropdown:_createList()
-        self.List = Core.Util.Create("Frame", { Name = "List", Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 1, 0), BackgroundColor3 = self._theme.Background2, ClipsDescendants = true, BorderSizePixel = 0, ZIndex = Core.ZIndex.Component, Parent = self.Root })
+        self.List = Core.Util.Create("Frame", { Name = "List", Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 1, 0), BackgroundColor3 = self._theme.Background2, ClipsDescendants = true, BorderSizePixel = 0, Parent = self.Root })
         Core.Util.Create("UIStroke", { Color = self._theme.Border, Thickness = 1, Parent = self.List })
         
         self.Options = Core.Util.Create("ScrollingFrame", { Name = "Options", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, CanvasSize = UDim2.new(1, 0, 0, 0), ScrollBarThickness = (self._theme.Scrollbar and self._theme.Scrollbar.Thickness) or 4, ScrollBarImageColor3 = (self._theme.Scrollbar and self._theme.Scrollbar.Color) or self._theme.Accent, Parent = self.List })
@@ -2815,19 +2807,23 @@ local function BuildUI(Theme)
         Core.Util.Tween(self.Arrow, { Rotation = self._open and 180 or 0 }, 0.2)
 
         if self._open then
-            -- Raise only the List above all other components
-            self.List.ZIndex = Core.ZIndex.DropdownOpen
-            for _, c in ipairs(self.List:GetDescendants()) do
-                if c:IsA("GuiObject") then c.ZIndex = Core.ZIndex.DropdownOpen end
+            -- Boost self.Root above sibling components, and boost the ancestor
+            -- section above sibling sections, so the list overlays everything below.
+            self.Root.ZIndex = Core.ZIndex.Dropdown
+            local sectionRoot = self.Root.Parent and self.Root.Parent.Parent
+            if sectionRoot and sectionRoot:IsA("GuiObject") then
+                self._prevSectionZIndex = sectionRoot.ZIndex
+                sectionRoot.ZIndex = Core.ZIndex.Dropdown
             end
             Core.Util.Tween(self.List, { Size = UDim2.new(1, 0, 0, maxHeight) }, 0.2)
         else
             Core.Util.Tween(self.List, { Size = UDim2.new(1, 0, 0, 0) }, 0.2)
             task.delay(0.21, function()
                 if not self._open and not self._destroyed then
-                    self.List.ZIndex = Core.ZIndex.Component
-                    for _, c in ipairs(self.List:GetDescendants()) do
-                        if c:IsA("GuiObject") then c.ZIndex = Core.ZIndex.Component end
+                    self.Root.ZIndex = 1
+                    local sectionRoot = self.Root.Parent and self.Root.Parent.Parent
+                    if sectionRoot and sectionRoot:IsA("GuiObject") then
+                        sectionRoot.ZIndex = self._prevSectionZIndex or 1
                     end
                 end
             end)
@@ -3204,7 +3200,7 @@ local function BuildUI(Theme)
 
         local self = BaseComponent.new({ Name = "Hotkey", Theme = props.Theme or Theme, Tooltip = props.Tooltip })
         setmetatable(self, Hotkey)
-        self.Root = Core.Util.Create("Frame", { Name = "Hotkey", Size = UDim2.new(1, 0, 0, Core.Layout.ComponentHeight), BackgroundTransparency = 1, ZIndex = Core.ZIndex.Component, Parent = props.Parent })
+        self.Root = Core.Util.Create("Frame", { Name = "Hotkey", Size = UDim2.new(1, 0, 0, Core.Layout.ComponentHeight), BackgroundTransparency = 1, Parent = props.Parent })
         self._text = props.Text or "Hotkey"
         self:_createLabel(self._text)
         self:_createButton()
@@ -3306,7 +3302,7 @@ local function BuildUI(Theme)
         local self = BaseComponent.new({ Name = "ColorPicker", Theme = props.Theme or Theme, Tooltip = props.Tooltip })
         setmetatable(self, ColorPicker)
         
-        self.Root = Core.Util.Create("Frame", { Name = "ColorPicker", Size = UDim2.new(1, 0, 0, Core.Layout.ComponentHeight), BackgroundTransparency = 1, ZIndex = Core.ZIndex.Component, Parent = props.Parent })
+        self.Root = Core.Util.Create("Frame", { Name = "ColorPicker", Size = UDim2.new(1, 0, 0, Core.Layout.ComponentHeight), BackgroundTransparency = 1, Parent = props.Parent })
         self._color = props.Default or Color3.fromRGB(255, 255, 255)
         self._transparency = props.Transparency or 0
         self._callback = props.Callback
@@ -3494,17 +3490,21 @@ local function BuildUI(Theme)
         local size = self._open and UDim2.new(1, 0, 0, 170) or UDim2.new(1, 0, 0, 0)
         Core.Util.Tween(self.Container, {Size = size}, 0.2)
         if self._open then
-            -- Raise only the Container above all other components
-            self.Container.ZIndex = Core.ZIndex.DropdownOpen
-            for _, c in ipairs(self.Container:GetDescendants()) do
-                if c:IsA("GuiObject") then c.ZIndex = Core.ZIndex.DropdownOpen end
+            -- Boost self.Root above sibling components, and boost the ancestor
+            -- section above sibling sections, so the panel overlays everything below.
+            self.Root.ZIndex = Core.ZIndex.Dropdown
+            local sectionRoot = self.Root.Parent and self.Root.Parent.Parent
+            if sectionRoot and sectionRoot:IsA("GuiObject") then
+                self._prevSectionZIndex = sectionRoot.ZIndex
+                sectionRoot.ZIndex = Core.ZIndex.Dropdown
             end
         else
             task.delay(0.21, function()
                 if not self._open and not self._destroyed then
-                    self.Container.ZIndex = Core.ZIndex.Component
-                    for _, c in ipairs(self.Container:GetDescendants()) do
-                        if c:IsA("GuiObject") then c.ZIndex = Core.ZIndex.Component end
+                    self.Root.ZIndex = 1
+                    local sectionRoot = self.Root.Parent and self.Root.Parent.Parent
+                    if sectionRoot and sectionRoot:IsA("GuiObject") then
+                        sectionRoot.ZIndex = self._prevSectionZIndex or 1
                     end
                 end
             end)
@@ -3680,7 +3680,6 @@ local function BuildUI(Theme)
             BackgroundTransparency = hasText and 1 or 0,
             BackgroundColor3 = self._theme.Border,
             BorderSizePixel = 0,
-            ZIndex = Core.ZIndex.Component,
             Parent = props.Parent
         })
         if hasText then
@@ -3725,7 +3724,7 @@ local function BuildUI(Theme)
         self._callback = props.Callback
         self.Root = Core.Util.Create("Frame", {
             Name = "RadioGroup", Size = UDim2.new(1, 0, 0, 0),
-            AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ZIndex = Core.ZIndex.Component, Parent = props.Parent
+            AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = props.Parent
         })
         if props.Text then
             self._label = Core.Util.Create("TextLabel", {
@@ -3822,7 +3821,7 @@ local function BuildUI(Theme)
         self._rowHeight = props.RowHeight or Core.Layout.ComponentHeight
         self.Root = Core.Util.Create("Frame", {
             Name = "DataTable", Size = UDim2.new(1, 0, 0, 0),
-            AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, ZIndex = Core.ZIndex.Component, Parent = props.Parent
+            AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = props.Parent
         })
         self._headerRow = Core.Util.Create("Frame", {
             Name = "HeaderRow", Size = UDim2.new(1, 0, 0, self._rowHeight),
@@ -3918,7 +3917,7 @@ local function BuildUI(Theme)
         self.Root = Core.Util.Create("Frame", {
             Name = "CodeBlock", Size = UDim2.new(1, 0, 0, totalH),
             BackgroundColor3 = self._theme.Background2, BorderSizePixel = 0,
-            ClipsDescendants = true, ZIndex = Core.ZIndex.Component, Parent = props.Parent
+            ClipsDescendants = true, Parent = props.Parent
         })
         Core.Util.Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = self.Root })
         Core.Util.Create("UIStroke", { Color = self._theme.Border, Thickness = 1, Parent = self.Root })
@@ -3938,7 +3937,7 @@ local function BuildUI(Theme)
                 Name = "CopyBtn", Size = UDim2.fromOffset(44, 16),
                 Position = UDim2.new(1, -52, 0, 4), BackgroundColor3 = self._theme.Background2,
                 Text = "copy", TextColor3 = self._theme.SubTextColor,
-                Font = self._theme.Font, TextSize = 11, BorderSizePixel = 0, ZIndex = Core.ZIndex.Component + 1, Parent = self.Root
+                Font = self._theme.Font, TextSize = 11, BorderSizePixel = 0, ZIndex = 2, Parent = self.Root
             })
             Core.Util.Create("UICorner",  { CornerRadius = UDim.new(0, 3), Parent = self._copyBtn })
             Core.Util.Create("UIStroke",  { Color = self._theme.Border, Thickness = 1, Parent = self._copyBtn })
@@ -3994,7 +3993,6 @@ local function BuildUI(Theme)
             Size = UDim2.new(1, 0, 0, 0),
             AutomaticSize = Enum.AutomaticSize.Y,
             BackgroundTransparency = 1,
-            ZIndex = Core.ZIndex.Section,
             Parent = props.Parent
         })
         
@@ -4008,7 +4006,6 @@ local function BuildUI(Theme)
             TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left,
             AutoButtonColor = false,
-            ZIndex = Core.ZIndex.Section,
             Parent = self.Root
         })
         
@@ -4024,7 +4021,6 @@ local function BuildUI(Theme)
             BackgroundColor3 = self._theme.Background,
             BackgroundTransparency = 0.6,
             ClipsDescendants = false,
-            ZIndex = Core.ZIndex.Section,
             Parent = self.Root
         })
         Core.Util.Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = self.Content })
