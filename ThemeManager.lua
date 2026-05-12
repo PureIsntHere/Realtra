@@ -108,7 +108,18 @@ return function()
                 GridColor = fx.GridColor or (p.grid or border),
                 GridAlpha = fx.GridAlpha or 0.06,
                 GridGap = fx.GridGap or 16,
-            }
+            },
+            Button = {
+                DangerIdle   = p.dangerIdle   or darken(rgb('#C0392B'), 0.15),
+                DangerHover  = p.dangerHover  or rgb('#C0392B'),
+                DangerText   = p.dangerText   or Color3.fromRGB(255, 240, 240),
+                SuccessIdle  = p.successIdle  or darken(rgb('#27AE60'), 0.15),
+                SuccessHover = p.successHover or rgb('#27AE60'),
+                SuccessText  = p.successText  or Color3.fromRGB(230, 255, 240),
+                WarningIdle  = p.warningIdle  or darken(rgb('#E67E22'), 0.20),
+                WarningHover = p.warningHover or rgb('#E67E22'),
+                WarningText  = p.warningText  or Color3.fromRGB(255, 245, 210),
+            },
         }
     end
 
