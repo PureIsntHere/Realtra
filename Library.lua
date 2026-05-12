@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
 local Core = {
-    Version = "3.3.5",
+    Version = "3.3.6",
     Debug = false
 }
 
@@ -2808,21 +2808,18 @@ local function BuildUI(Theme)
 
         if self._open then
             self.Root.ZIndex = Core.ZIndex.Dropdown
-            -- Walk up to the direct child of the page ScrollingFrame.
-            -- This handles nested layouts (LeftCol > Section inside ColumnRow)
-            -- so the entire column-row is boosted above sibling sections below it.
-            local ancestor = self.Root
-            while ancestor do
-                local p = ancestor.Parent
-                if not p or p:IsA("ScrollingFrame") then break end
-                ancestor = p
-            end
-            if ancestor and ancestor ~= self.Root then
-                self._prevAncestorZIndex = ancestor.ZIndex
-                self._boostedAncestor = ancestor
-                ancestor.ZIndex = Core.ZIndex.Dropdown
-            else
-                self._boostedAncestor = nil
+            -- Boost every GuiObject ancestor up to (not including) the page ScrollingFrame.
+            -- This fixes both cross-section overlap (ColumnRow vs Section below) and
+            -- cross-column overlap (LeftCol vs RightCol, where RightCol wins by DOM order).
+            self._boostedAncestors = {}
+            local cur = self.Root.Parent
+            while cur do
+                if cur:IsA("ScrollingFrame") then break end
+                if cur:IsA("GuiObject") then
+                    table.insert(self._boostedAncestors, { inst = cur, prev = cur.ZIndex })
+                    cur.ZIndex = Core.ZIndex.Dropdown
+                end
+                cur = cur.Parent
             end
             Core.Util.Tween(self.List, { Size = UDim2.new(1, 0, 0, maxHeight) }, 0.2)
         else
@@ -2830,9 +2827,11 @@ local function BuildUI(Theme)
             task.delay(0.21, function()
                 if not self._open and not self._destroyed then
                     self.Root.ZIndex = 1
-                    if self._boostedAncestor then
-                        self._boostedAncestor.ZIndex = self._prevAncestorZIndex or 1
-                        self._boostedAncestor = nil
+                    if self._boostedAncestors then
+                        for _, entry in ipairs(self._boostedAncestors) do
+                            entry.inst.ZIndex = entry.prev
+                        end
+                        self._boostedAncestors = nil
                     end
                 end
             end)
@@ -3500,27 +3499,26 @@ local function BuildUI(Theme)
         Core.Util.Tween(self.Container, {Size = size}, 0.2)
         if self._open then
             self.Root.ZIndex = Core.ZIndex.Dropdown
-            -- Walk up to the direct child of the page ScrollingFrame.
-            local ancestor = self.Root
-            while ancestor do
-                local p = ancestor.Parent
-                if not p or p:IsA("ScrollingFrame") then break end
-                ancestor = p
-            end
-            if ancestor and ancestor ~= self.Root then
-                self._prevAncestorZIndex = ancestor.ZIndex
-                self._boostedAncestor = ancestor
-                ancestor.ZIndex = Core.ZIndex.Dropdown
-            else
-                self._boostedAncestor = nil
+            -- Boost every GuiObject ancestor up to (not including) the page ScrollingFrame.
+            self._boostedAncestors = {}
+            local cur = self.Root.Parent
+            while cur do
+                if cur:IsA("ScrollingFrame") then break end
+                if cur:IsA("GuiObject") then
+                    table.insert(self._boostedAncestors, { inst = cur, prev = cur.ZIndex })
+                    cur.ZIndex = Core.ZIndex.Dropdown
+                end
+                cur = cur.Parent
             end
         else
             task.delay(0.21, function()
                 if not self._open and not self._destroyed then
                     self.Root.ZIndex = 1
-                    if self._boostedAncestor then
-                        self._boostedAncestor.ZIndex = self._prevAncestorZIndex or 1
-                        self._boostedAncestor = nil
+                    if self._boostedAncestors then
+                        for _, entry in ipairs(self._boostedAncestors) do
+                            entry.inst.ZIndex = entry.prev
+                        end
+                        self._boostedAncestors = nil
                     end
                 end
             end)
