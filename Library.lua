@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
 local Core = {
-    Version = "3.2.3",
+    Version = "3.2.2",
     Debug = false
 }
 
@@ -120,7 +120,19 @@ Core.Theme = {
         GridColor = Color3.fromRGB(38, 35, 58),
         GridAlpha = 0.15,
         GridGap = 16,
-    }
+    },
+
+    Button = {
+        DangerIdle   = Color3.fromRGB(163, 48,  37),
+        DangerHover  = Color3.fromRGB(192, 57,  43),
+        DangerText   = Color3.fromRGB(255, 240, 240),
+        SuccessIdle  = Color3.fromRGB(34,  139, 73),
+        SuccessHover = Color3.fromRGB(39,  174, 96),
+        SuccessText  = Color3.fromRGB(230, 255, 240),
+        WarningIdle  = Color3.fromRGB(184, 100, 26),
+        WarningHover = Color3.fromRGB(230, 126, 34),
+        WarningText  = Color3.fromRGB(255, 245, 210),
+    },
 }
 
 Core.Config = {
@@ -1285,7 +1297,7 @@ Core.Modal = {
 local function BuildUI(Theme)
     local UI = { Version = "2.6.15" }
 
-    local Button, Toggle, Slider, TextInput, Dropdown, MultiDropdown, Hotkey, ColorPicker, Notification, Section, ProgressBar, Label, Tabbox
+    local Button, Toggle, Slider, TextInput, Dropdown, MultiDropdown, Hotkey, ColorPicker, Notification, Section, ProgressBar, Label, Tabbox, Separator, RadioGroup, DataTable, CodeBlock
 
     local ComponentMixin = {}
     
@@ -1425,6 +1437,51 @@ local function BuildUI(Theme)
     function ComponentMixin:AddTabbox(opts)
         opts = opts or {}
         local comp = Tabbox.new({ Parent = self:GetParent(), Theme = self:GetTheme() })
+        table.insert(self:GetComponentList(), comp)
+        return comp
+    end
+
+    function ComponentMixin:AddSeparator(opts)
+        opts = opts or {}
+        local comp = Separator.new({ Parent = self:GetParent(), Text = opts.Text, Theme = self:GetTheme() })
+        table.insert(self:GetComponentList(), comp)
+        return comp
+    end
+
+    function ComponentMixin:AddRadioGroup(opts)
+        local comp = RadioGroup.new({
+            Parent   = self:GetParent(),
+            Text     = opts.Text,
+            Options  = opts.Options or {},
+            Value    = opts.Value,
+            Callback = opts.Callback,
+            Theme    = self:GetTheme(),
+            Tooltip  = opts.Tooltip,
+        })
+        comp.Flag = opts.Flag
+        table.insert(self:GetComponentList(), comp)
+        return comp
+    end
+
+    function ComponentMixin:AddTable(opts)
+        local comp = DataTable.new({
+            Parent    = self:GetParent(),
+            Headers   = opts.Headers or {},
+            Rows      = opts.Rows    or {},
+            RowHeight = opts.RowHeight,
+            Theme     = self:GetTheme(),
+        })
+        table.insert(self:GetComponentList(), comp)
+        return comp
+    end
+
+    function ComponentMixin:AddCodeBlock(opts)
+        local comp = CodeBlock.new({
+            Parent   = self:GetParent(),
+            Text     = opts.Text or opts.Code or "",
+            MaxLines = opts.MaxLines,
+            Theme    = self:GetTheme(),
+        })
         table.insert(self:GetComponentList(), comp)
         return comp
     end
@@ -1865,7 +1922,7 @@ local function BuildUI(Theme)
     function Window:_createTitleBar(title, subtitle)
         self.TitleBar = Core.Util.Create("Frame", { Name = "TitleBar", Size = UDim2.new(1, 0, 0, Core.Layout.HeaderHeight), BackgroundColor3 = self._theme.Window.Background, Parent = self.Root })
         self.Title = Core.Util.Create("TextLabel", { Name = "Title", Size = UDim2.new(1, -16, 1, 0), Position = UDim2.fromOffset(8, 0), BackgroundTransparency = 1, Text = title or "Window", TextColor3 = self._theme.Window.TitleText, TextXAlignment = Enum.TextXAlignment.Left, Font = self._theme.Font, TextSize = 14, Parent = self.TitleBar })
-        if subtitle then self.Subtitle = Core.Util.Create("TextLabel", { Name = "Subtitle", Size = UDim2.new(1, -38, 1, 0), Position = UDim2.fromOffset(8, 0), BackgroundTransparency = 1, Text = subtitle, TextColor3 = self._theme.Window.SubtitleText, TextXAlignment = Enum.TextXAlignment.Right, Font = self._theme.Font, TextSize = 14, Parent = self.TitleBar }) end
+        if subtitle then self.Subtitle = Core.Util.Create("TextLabel", { Name = "Subtitle", Size = UDim2.new(1, -62, 1, 0), Position = UDim2.fromOffset(8, 0), BackgroundTransparency = 1, Text = subtitle, TextColor3 = self._theme.Window.SubtitleText, TextXAlignment = Enum.TextXAlignment.Right, Font = self._theme.Font, TextSize = 14, Parent = self.TitleBar }) end
         
         self.DockIcon = Core.Util.Create("TextButton", { Name = "DockIcon", Size = UDim2.fromOffset(20, 20), Position = UDim2.new(1, -26, 0.5, -10), BackgroundColor3 = Color3.new(), BackgroundTransparency = 1, BorderSizePixel = 0, Text = "≡", TextColor3 = self._theme.Window and self._theme.Window.TitleText or self._theme.TextColor, TextScaled = false, TextSize = 16, Font = Enum.Font.SourceSans, Parent = self.TitleBar })
         Core.Util.Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = self.DockIcon })
@@ -1873,6 +1930,12 @@ local function BuildUI(Theme)
         self.DockIcon.InputBegan:Connect(function(input) if Core.Util.IsActivate(input.UserInputType) then self:ToggleDock() end end)
         self.DockIcon.MouseEnter:Connect(function() self.DockIcon.BackgroundColor3 = self._theme.Accent; self.DockIcon.BackgroundTransparency = 0.8 end)
         self.DockIcon.MouseLeave:Connect(function() if self.Docking and self.Docking._visible then self.DockIcon.BackgroundColor3 = self._theme.Accent; self.DockIcon.BackgroundTransparency = 0.2 else self.DockIcon.BackgroundColor3 = Color3.new(); self.DockIcon.BackgroundTransparency = 1 end end)
+
+        self.MinimizeBtn = Core.Util.Create("TextButton", { Name = "MinimizeBtn", Size = UDim2.fromOffset(20, 20), Position = UDim2.new(1, -50, 0.5, -10), BackgroundColor3 = Color3.new(), BackgroundTransparency = 1, BorderSizePixel = 0, Text = "−", TextColor3 = self._theme.Window and self._theme.Window.TitleText or self._theme.TextColor, TextScaled = false, TextSize = 18, Font = Enum.Font.SourceSans, Parent = self.TitleBar })
+        Core.Util.Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = self.MinimizeBtn })
+        self.MinimizeBtn.InputBegan:Connect(function(input) if Core.Util.IsActivate(input.UserInputType) then self:ToggleMinimize() end end)
+        self.MinimizeBtn.MouseEnter:Connect(function() self.MinimizeBtn.BackgroundColor3 = self._theme.Background2; self.MinimizeBtn.BackgroundTransparency = 0.5 end)
+        self.MinimizeBtn.MouseLeave:Connect(function() self.MinimizeBtn.BackgroundColor3 = Color3.new(); self.MinimizeBtn.BackgroundTransparency = 1 end)
     end
     
     function Window:_createContentArea()
@@ -1913,7 +1976,33 @@ local function BuildUI(Theme)
         tabButton.InputBegan:Connect(function(input) if Core.Util.IsActivate(input.UserInputType) then self:SelectTab(name) end end)
         
         local tab = { Name = name, Button = tabButton, Page = page, Icon = icon, Window = self }
-        
+
+        -- Badge counter: call tab:SetBadge(n) to show a pill; tab:ClearBadge() to hide it
+        local _badge = Core.Util.Create("TextLabel", {
+            Name = "Badge", Size = UDim2.fromOffset(16, 16),
+            Position = UDim2.new(1, -4, 0, -4), AnchorPoint = Vector2.new(1, 0),
+            BackgroundColor3 = self._theme.Accent, Text = "",
+            TextColor3 = Color3.fromRGB(255, 255, 255), Font = self._theme.Font,
+            TextSize = 10, Visible = false, ZIndex = 10, Parent = tabButton,
+        })
+        Core.Util.Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = _badge })
+        tab._badge = _badge
+
+        function tab:SetBadge(count)
+            if count and count > 0 then
+                local s = count > 99 and "99+" or tostring(count)
+                self._badge.Text = s
+                local w = count > 99 and 28 or count > 9 and 20 or 16
+                self._badge.Size = UDim2.fromOffset(w, 16)
+                self._badge.Visible = true
+            else
+                self._badge.Visible = false
+            end
+        end
+        function tab:ClearBadge()
+            if self._badge then self._badge.Visible = false end
+        end
+
         function tab:GetParent() return self.Page end
         function tab:GetTheme() return self.Window._theme end
         function tab:GetComponentList() return self.Window._components end
@@ -1984,7 +2073,33 @@ local function BuildUI(Theme)
     function Window:ToggleDock()
         if self.Docking then self.Docking:Toggle() end
     end
-    
+
+    function Window:Minimize()
+        if self._minimized then return end
+        self._minimized  = true
+        self._savedHeight = self.Root.AbsoluteSize.Y
+        if self.Content      then self.Content.Visible = false end
+        if self.TabContainer then self.TabContainer.Visible = false end
+        Core.Util.Tween(self.Root, { Size = UDim2.fromOffset(self.Root.AbsoluteSize.X, Core.Layout.HeaderHeight) }, 0.2)
+        if self.MinimizeBtn then self.MinimizeBtn.Text = "□" end
+    end
+
+    function Window:Restore()
+        if not self._minimized then return end
+        self._minimized = false
+        local h = self._savedHeight or 500
+        Core.Util.Tween(self.Root, { Size = UDim2.fromOffset(self.Root.AbsoluteSize.X, h) }, 0.2)
+        task.delay(0.05, function()
+            if self.Content then self.Content.Visible = true end
+            if self.TabContainer and self._tabs and #self._tabs > 0 then self.TabContainer.Visible = true end
+        end)
+        if self.MinimizeBtn then self.MinimizeBtn.Text = "−" end
+    end
+
+    function Window:ToggleMinimize()
+        if self._minimized then self:Restore() else self:Minimize() end
+    end
+
     function Window:_updateContentPosition()
         if not self.Content then return end
         local topOffset = self.TabContainer and self.TabContainer.Visible and (Core.Layout.HeaderHeight + (self._theme.Tab.PillHeight or Core.Layout.TabPillHeight)) or Core.Layout.HeaderHeight
@@ -2047,6 +2162,10 @@ local function BuildUI(Theme)
                             if inner then inner.BackgroundColor3 = safeColor(thT.ActiveFill, bg) end
                         end
                     end
+                    if t._badge then
+                        t._badge.BackgroundColor3 = safeColor(accent, Color3.fromRGB(100, 100, 255))
+                        t._badge.Font = self._theme.Font
+                    end
                 end
             end
         end
@@ -2075,6 +2194,10 @@ local function BuildUI(Theme)
                 self.DockIcon.BackgroundColor3 = Color3.new()
                 self.DockIcon.BackgroundTransparency = 1
             end
+        end
+
+        if self.MinimizeBtn then
+            self.MinimizeBtn.TextColor3 = safeColor(thW.TitleText, text)
         end
 
         if self._resizeGrip and self._resizeGrip.UpdateColors then
@@ -2300,30 +2423,31 @@ local function BuildUI(Theme)
     end
     function Button:SetText(text) self.Root.Text = text end
     function Button:SetVariant(variant)
-        local VARIANT = {
-            danger  = { idle = Color3.fromRGB(155, 50,  50),  hover = Color3.fromRGB(195, 65,  65)  },
-            success = { idle = Color3.fromRGB(45,  125, 65),  hover = Color3.fromRGB(55,  155, 80)  },
-            warning = { idle = Color3.fromRGB(155, 115, 30),  hover = Color3.fromRGB(190, 145, 40)  },
-        }
         self._variant = variant or "default"
-        local c = VARIANT[self._variant]
-        if c then
-            self._idleColor  = c.idle
-            self._hoverColor = c.hover
+        local bt = self._theme.Button or {}
+        if self._variant == "danger" then
+            self._idleColor   = bt.DangerIdle  or Color3.fromRGB(163, 48,  37)
+            self._hoverColor  = bt.DangerHover or Color3.fromRGB(192, 57,  43)
+            self._variantText = bt.DangerText  or Color3.fromRGB(255, 240, 240)
+        elseif self._variant == "success" then
+            self._idleColor   = bt.SuccessIdle  or Color3.fromRGB(34,  139, 73)
+            self._hoverColor  = bt.SuccessHover or Color3.fromRGB(39,  174, 96)
+            self._variantText = bt.SuccessText  or Color3.fromRGB(230, 255, 240)
+        elseif self._variant == "warning" then
+            self._idleColor   = bt.WarningIdle  or Color3.fromRGB(184, 100, 26)
+            self._hoverColor  = bt.WarningHover or Color3.fromRGB(230, 126, 34)
+            self._variantText = bt.WarningText  or Color3.fromRGB(255, 245, 210)
         else
-            self._idleColor  = self._theme.Background2
-            self._hoverColor = self._theme.Accent
+            self._idleColor   = self._theme.Background2
+            self._hoverColor  = self._theme.Accent
+            self._variantText = nil
         end
         self.Root.BackgroundColor3 = self._idleColor
+        self.Root.TextColor3 = self._variantText or self._theme.TextColor
     end
     function Button:RefreshTheme()
         if self._destroyed then return end
-        if not self._variant or self._variant == "default" then
-            self._idleColor  = self._theme.Background2
-            self._hoverColor = self._theme.Accent
-        end
-        self.Root.BackgroundColor3 = self._idleColor
-        self.Root.TextColor3 = self._theme.TextColor
+        self:SetVariant(self._variant)
         local stroke = self.Root:FindFirstChildOfClass("UIStroke")
         if stroke then stroke.Color = self._theme.Border end
     end
@@ -2670,54 +2794,56 @@ local function BuildUI(Theme)
         if self._open == oldOpen then return end
 
         local numOptions = #self._options
-        local maxHeight = math.min(numOptions * Core.Layout.ComponentHeight, Core.Layout.ComponentHeight * 5)
-        local size = self._open and UDim2.new(1, 0, 0, maxHeight) or UDim2.new(1, 0, 0, 0)
-
-        Core.Util.Tween(self.List, {Size = size}, 0.2)
-        Core.Util.Tween(self.Arrow, {Rotation = self._open and 180 or 0}, 0.2)
-
-        local function updateSectionZIndex(isOpen)
-            local p = self.Root.Parent
-            if p and p.Name == "Content" then
-                local sectionFrame = p.Parent
-                if sectionFrame and sectionFrame.Name == "Section" then
-                    local count = sectionFrame:GetAttribute("OpenDropdowns") or 0
-                    if isOpen then
-                        count = count + 1
-                    else
-                        count = math.max(0, count - 1)
-                    end
-                    sectionFrame:SetAttribute("OpenDropdowns", count)
-                    sectionFrame.ZIndex = (count > 0) and 100 or 1
-                end
-            end
-        end
+        local maxHeight  = math.min(numOptions * Core.Layout.ComponentHeight, Core.Layout.ComponentHeight * 5)
+        Core.Util.Tween(self.Arrow, { Rotation = self._open and 180 or 0 }, 0.2)
 
         if self._open then
-            self.Root.ZIndex    = 100
-            self.List.ZIndex    = 101
-            self.Options.ZIndex = 102
-            updateSectionZIndex(true)
-            -- Auto-scroll the parent ScrollingFrame so the list is fully visible
-            local scrollFrame = self.Root:FindFirstAncestorWhichIsA("ScrollingFrame")
-            if scrollFrame then
-                local listBottom = self.Root.AbsolutePosition.Y + self.Root.AbsoluteSize.Y + maxHeight
-                local viewBottom = scrollFrame.AbsolutePosition.Y + scrollFrame.AbsoluteSize.Y
-                if listBottom > viewBottom then
-                    local overshoot = listBottom - viewBottom + 8
-                    scrollFrame.CanvasPosition = Vector2.new(
-                        scrollFrame.CanvasPosition.X,
-                        scrollFrame.CanvasPosition.Y + overshoot
-                    )
+            -- Reparent list to the shared overlay so it floats above all content
+            local overlay = Core.Overlay.Get()
+            local absPos  = self.Root.AbsolutePosition
+            local absSize = self.Root.AbsoluteSize
+            self.List.Size     = UDim2.fromOffset(absSize.X, 0)
+            self.List.Position = UDim2.fromOffset(absPos.X, absPos.Y + absSize.Y)
+            self.List.Parent   = overlay
+            Core.Util.Tween(self.List, { Size = UDim2.fromOffset(absSize.X, maxHeight) }, 0.2)
+
+            -- Track root position while the dropdown is open (window may be dragged)
+            if self._posTrack then self._posTrack:Disconnect() end
+            self._posTrack = RunService.Heartbeat:Connect(function()
+                if not self._open or self._destroyed or not self.Root or not self.Root.Parent then
+                    if self._posTrack then self._posTrack:Disconnect(); self._posTrack = nil end
+                    return
                 end
-            end
+                local ap = self.Root.AbsolutePosition
+                local as = self.Root.AbsoluteSize
+                self.List.Position = UDim2.fromOffset(ap.X, ap.Y + as.Y)
+                self.List.Size     = UDim2.fromOffset(as.X, self.List.Size.Y.Offset)
+            end)
+
+            -- Click-outside-to-close
+            if self._closeConn then self._closeConn:Disconnect() end
+            self._closeConn = UserInputService.InputBegan:Connect(function(input)
+                if not (input.UserInputType == Enum.UserInputType.MouseButton1 or
+                        input.UserInputType == Enum.UserInputType.Touch) then return end
+                if not self._open then return end
+                local mp = UserInputService:GetMouseLocation()
+                local lp, ls = self.List.AbsolutePosition, self.List.AbsoluteSize
+                local rp, rs = self.Root.AbsolutePosition, self.Root.AbsoluteSize
+                local inList = mp.X >= lp.X and mp.X <= lp.X + ls.X and mp.Y >= lp.Y and mp.Y <= lp.Y + ls.Y
+                local inRoot = mp.X >= rp.X and mp.X <= rp.X + rs.X and mp.Y >= rp.Y and mp.Y <= rp.Y + rs.Y
+                if not inList and not inRoot then self:Toggle(false) end
+            end)
         else
-            task.delay(0.2, function()
-                if not self._open then
-                    self.Root.ZIndex    = 1
-                    self.List.ZIndex    = 2
-                    self.Options.ZIndex = 1
-                    updateSectionZIndex(false)
+            local curW = self.List.Size.X.Offset > 0 and self.List.Size.X.Offset or self.Root.AbsoluteSize.X
+            Core.Util.Tween(self.List, { Size = UDim2.fromOffset(curW, 0) }, 0.2)
+            if self._posTrack  then self._posTrack:Disconnect();  self._posTrack  = nil end
+            if self._closeConn then self._closeConn:Disconnect(); self._closeConn = nil end
+            -- Re-parent back after the close animation finishes
+            task.delay(0.21, function()
+                if not self._open and not self._destroyed and self.List then
+                    self.List.Parent   = self.Root
+                    self.List.Size     = UDim2.new(1, 0, 0, 0)
+                    self.List.Position = UDim2.new(0, 0, 1, 0)
                 end
             end)
         end
@@ -2750,6 +2876,12 @@ local function BuildUI(Theme)
 
     function BaseDropdown:Destroy()
         if self._destroyed then return end
+        if self._posTrack  then self._posTrack:Disconnect();  self._posTrack  = nil end
+        if self._closeConn then self._closeConn:Disconnect(); self._closeConn = nil end
+        -- List may be parented to the overlay if destroyed while open
+        if self.List and self.List.Parent ~= self.Root then
+            pcall(function() self.List:Destroy() end)
+        end
         BaseComponent.Destroy(self)
     end
 
@@ -3380,16 +3512,57 @@ local function BuildUI(Theme)
     
     function ColorPicker:Toggle()
         self._open = not self._open
-        local size = self._open and UDim2.new(1, 0, 0, 170) or UDim2.new(1, 0, 0, 0)
-        Core.Util.Tween(self.Container, {Size = size}, 0.2)
+        local pickerH = 170
+
         if self._open then
-            self.Root.ZIndex      = 100
-            self.Container.ZIndex = 101
+            local overlay = Core.Overlay.Get()
+            local absPos  = self.Preview.AbsolutePosition
+            local absSize = self.Preview.AbsoluteSize
+            local rootW   = self.Root.AbsoluteSize.X
+            -- Align left edge with the Root, open below the preview button row
+            self.Container.Size     = UDim2.fromOffset(rootW, 0)
+            self.Container.Position = UDim2.fromOffset(self.Root.AbsolutePosition.X, absPos.Y + absSize.Y + 2)
+            self.Container.Parent   = overlay
+            Core.Util.Tween(self.Container, { Size = UDim2.fromOffset(rootW, pickerH) }, 0.2)
+
+            -- Track root while open (window drag / scroll)
+            if self._cpPosTrack then self._cpPosTrack:Disconnect() end
+            self._cpPosTrack = RunService.Heartbeat:Connect(function()
+                if not self._open or self._destroyed or not self.Root or not self.Root.Parent then
+                    if self._cpPosTrack then self._cpPosTrack:Disconnect(); self._cpPosTrack = nil end
+                    return
+                end
+                local rp = self.Root.AbsolutePosition
+                local pp = self.Preview.AbsolutePosition
+                local ps = self.Preview.AbsoluteSize
+                self.Container.Position = UDim2.fromOffset(rp.X, pp.Y + ps.Y + 2)
+                self.Container.Size     = UDim2.fromOffset(self.Root.AbsoluteSize.X, self.Container.Size.Y.Offset)
+            end)
+
+            -- Click-outside-to-close
+            if self._cpCloseConn then self._cpCloseConn:Disconnect() end
+            self._cpCloseConn = UserInputService.InputBegan:Connect(function(input)
+                if not (input.UserInputType == Enum.UserInputType.MouseButton1 or
+                        input.UserInputType == Enum.UserInputType.Touch) then return end
+                if not self._open then return end
+                local mp = UserInputService:GetMouseLocation()
+                local cp, cs = self.Container.AbsolutePosition, self.Container.AbsoluteSize
+                local rp, rs = self.Root.AbsolutePosition, self.Root.AbsoluteSize
+                local inContainer = mp.X >= cp.X and mp.X <= cp.X + cs.X and mp.Y >= cp.Y and mp.Y <= cp.Y + cs.Y
+                local inRoot      = mp.X >= rp.X and mp.X <= rp.X + rs.X and mp.Y >= rp.Y and mp.Y <= rp.Y + rs.Y
+                if not inContainer and not inRoot then self:Toggle() end
+            end)
         else
-            task.delay(0.2, function()
-                if not self._open then
-                    self.Root.ZIndex      = 1
-                    self.Container.ZIndex = 2
+            local curW = self.Container.Size.X.Offset > 0 and self.Container.Size.X.Offset or self.Root.AbsoluteSize.X
+            Core.Util.Tween(self.Container, { Size = UDim2.fromOffset(curW, 0) }, 0.2)
+            if self._cpPosTrack  then self._cpPosTrack:Disconnect();  self._cpPosTrack  = nil end
+            if self._cpCloseConn then self._cpCloseConn:Disconnect(); self._cpCloseConn = nil end
+            -- Re-parent back to root after the close animation
+            task.delay(0.21, function()
+                if not self._open and not self._destroyed and self.Container then
+                    self.Container.Parent   = self.Root
+                    self.Container.Size     = UDim2.new(1, 0, 0, 0)
+                    self.Container.Position = UDim2.new(0, 0, 1, 0)
                 end
             end)
         end
@@ -3411,6 +3584,12 @@ local function BuildUI(Theme)
 
     function ColorPicker:Destroy()
         if self._destroyed then return end
+        if self._cpPosTrack  then self._cpPosTrack:Disconnect();  self._cpPosTrack  = nil end
+        if self._cpCloseConn then self._cpCloseConn:Disconnect(); self._cpCloseConn = nil end
+        -- Container may be in the overlay if destroyed while open
+        if self.Container and self.Container.Parent ~= self.Root then
+            pcall(function() self.Container:Destroy() end)
+        end
         BaseComponent.Destroy(self)
     end
 
@@ -3549,6 +3728,319 @@ local function BuildUI(Theme)
         if self._destroyed then return end
         self._destroyed = true
         if self._slot then self._slot:Destroy(); self._slot = nil end
+    end
+
+    -- Separator: a horizontal rule, optionally labelled
+    Separator = setmetatable({}, {__index = BaseComponent})
+    Separator.__index = Separator
+    function Separator.new(props)
+        local self = BaseComponent.new({ Name = "Separator", Theme = props.Theme })
+        setmetatable(self, Separator)
+        local hasText = props.Text and props.Text ~= ""
+        self.Root = Core.Util.Create("Frame", {
+            Name = "Separator",
+            Size = UDim2.new(1, 0, 0, hasText and 20 or 1),
+            BackgroundTransparency = hasText and 1 or 0,
+            BackgroundColor3 = self._theme.Border,
+            BorderSizePixel = 0,
+            Parent = props.Parent
+        })
+        if hasText then
+            self._line1 = Core.Util.Create("Frame", {
+                Name = "Line1", Size = UDim2.new(0.5, -44, 0, 1),
+                Position = UDim2.new(0, 0, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5),
+                BackgroundColor3 = self._theme.Border, BorderSizePixel = 0, Parent = self.Root
+            })
+            self._textLabel = Core.Util.Create("TextLabel", {
+                Name = "Label", Size = UDim2.new(0, 80, 1, 0),
+                Position = UDim2.new(0.5, -40, 0, 0), BackgroundTransparency = 1,
+                Text = props.Text, TextColor3 = self._theme.SubTextColor,
+                Font = self._theme.Font, TextSize = 12, Parent = self.Root
+            })
+            self._line2 = Core.Util.Create("Frame", {
+                Name = "Line2", Size = UDim2.new(0.5, -44, 0, 1),
+                Position = UDim2.new(0.5, 40, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5),
+                BackgroundColor3 = self._theme.Border, BorderSizePixel = 0, Parent = self.Root
+            })
+        end
+        return self
+    end
+    function Separator:RefreshTheme()
+        if self._destroyed then return end
+        self.Root.BackgroundColor3 = self._theme.Border
+        if self._line1 then self._line1.BackgroundColor3 = self._theme.Border end
+        if self._textLabel then
+            self._textLabel.TextColor3 = self._theme.SubTextColor
+            self._textLabel.Font = self._theme.Font
+        end
+        if self._line2 then self._line2.BackgroundColor3 = self._theme.Border end
+    end
+
+    -- RadioGroup: mutually-exclusive option list
+    RadioGroup = setmetatable({}, {__index = BaseComponent})
+    RadioGroup.__index = RadioGroup
+    function RadioGroup.new(props)
+        local self = BaseComponent.new({ Name = "RadioGroup", Theme = props.Theme })
+        setmetatable(self, RadioGroup)
+        self._options  = props.Options or {}
+        self._value    = props.Value
+        self._callback = props.Callback
+        self.Root = Core.Util.Create("Frame", {
+            Name = "RadioGroup", Size = UDim2.new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = props.Parent
+        })
+        if props.Text then
+            self._label = Core.Util.Create("TextLabel", {
+                Name = "Label", Size = UDim2.new(1, 0, 0, 20),
+                BackgroundTransparency = 1, Text = props.Text,
+                TextColor3 = self._theme.SubTextColor, TextXAlignment = Enum.TextXAlignment.Left,
+                Font = self._theme.Font, TextSize = 12, Parent = self.Root
+            })
+        end
+        self._itemsFrame = Core.Util.Create("Frame", {
+            Name = "Items", Size = UDim2.new(1, 0, 0, 0),
+            Position = UDim2.fromOffset(0, props.Text and 22 or 0),
+            AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = self.Root
+        })
+        Core.Util.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2), Parent = self._itemsFrame })
+        self._buttons = {}
+        self:_buildOptions()
+        self:_setupTooltip(self.Root)
+        return self
+    end
+    function RadioGroup:_buildOptions()
+        for _, child in ipairs(self._itemsFrame:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+        self._buttons = {}
+        for i, opt in ipairs(self._options) do
+            local row = Core.Util.Create("Frame", {
+                Name = opt, Size = UDim2.new(1, 0, 0, Core.Layout.ComponentHeight),
+                BackgroundTransparency = 1, LayoutOrder = i, Parent = self._itemsFrame
+            })
+            local dot = Core.Util.Create("Frame", {
+                Name = "Dot", Size = UDim2.fromOffset(16, 16),
+                Position = UDim2.new(0, 4, 0.5, -8),
+                BackgroundColor3 = self._value == opt and self._theme.Accent or self._theme.Background2,
+                BorderSizePixel = 0, Parent = row
+            })
+            Core.Util.Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = dot })
+            Core.Util.Create("UIStroke", { Color = self._theme.Border, Thickness = 1, Parent = dot })
+            local inner = Core.Util.Create("Frame", {
+                Name = "Inner", Size = UDim2.fromOffset(8, 8),
+                Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                BackgroundTransparency = self._value == opt and 0 or 1, BorderSizePixel = 0, Parent = dot
+            })
+            Core.Util.Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = inner })
+            local lbl = Core.Util.Create("TextLabel", {
+                Name = "Label", Size = UDim2.new(1, -28, 1, 0), Position = UDim2.fromOffset(28, 0),
+                BackgroundTransparency = 1, Text = opt,
+                TextColor3 = self._value == opt and self._theme.TextColor or self._theme.SubTextColor,
+                TextXAlignment = Enum.TextXAlignment.Left, Font = self._theme.Font, TextSize = 14, Parent = row
+            })
+            row.InputBegan:Connect(function(input)
+                if Core.Util.IsActivate(input.UserInputType) then self:SetValue(opt) end
+            end)
+            self._buttons[opt] = { Row = row, Dot = dot, Inner = inner, Label = lbl }
+        end
+    end
+    function RadioGroup:SetValue(value, ignoreCallback)
+        self._value = value
+        for opt, parts in pairs(self._buttons) do
+            local active = (opt == value)
+            Core.Util.Tween(parts.Dot, { BackgroundColor3 = active and self._theme.Accent or self._theme.Background2 }, 0.15)
+            parts.Inner.BackgroundTransparency = active and 0 or 1
+            parts.Label.TextColor3 = active and self._theme.TextColor or self._theme.SubTextColor
+        end
+        if not ignoreCallback and self._callback then pcall(self._callback, value) end
+    end
+    function RadioGroup:GetValue() return self._value end
+    function RadioGroup:SetOptions(options) self._options = options; self:_buildOptions() end
+    function RadioGroup:RefreshTheme()
+        if self._destroyed then return end
+        if self._label then
+            self._label.TextColor3 = self._theme.SubTextColor
+            self._label.Font = self._theme.Font
+        end
+        for opt, parts in pairs(self._buttons) do
+            local active = (opt == self._value)
+            parts.Dot.BackgroundColor3 = active and self._theme.Accent or self._theme.Background2
+            local stroke = parts.Dot:FindFirstChildOfClass("UIStroke")
+            if stroke then stroke.Color = self._theme.Border end
+            parts.Label.TextColor3 = active and self._theme.TextColor or self._theme.SubTextColor
+            parts.Label.Font = self._theme.Font
+        end
+    end
+
+    -- DataTable: themed header + alternating rows
+    DataTable = setmetatable({}, {__index = BaseComponent})
+    DataTable.__index = DataTable
+    function DataTable.new(props)
+        local self = BaseComponent.new({ Name = "DataTable", Theme = props.Theme })
+        setmetatable(self, DataTable)
+        self._headers   = props.Headers  or {}
+        self._rows      = props.Rows     or {}
+        self._rowHeight = props.RowHeight or Core.Layout.ComponentHeight
+        self.Root = Core.Util.Create("Frame", {
+            Name = "DataTable", Size = UDim2.new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = props.Parent
+        })
+        self._headerRow = Core.Util.Create("Frame", {
+            Name = "HeaderRow", Size = UDim2.new(1, 0, 0, self._rowHeight),
+            BackgroundColor3 = self._theme.Background2, BorderSizePixel = 0, Parent = self.Root
+        })
+        Core.Util.Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = self._headerRow })
+        Core.Util.Create("UIStroke", { Color = self._theme.Border, Thickness = 1, Parent = self._headerRow })
+        Core.Util.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, SortOrder = Enum.SortOrder.LayoutOrder, Parent = self._headerRow })
+        self._body = Core.Util.Create("Frame", {
+            Name = "Body", Size = UDim2.new(1, 0, 0, 0),
+            Position = UDim2.fromOffset(0, self._rowHeight + 2),
+            AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Parent = self.Root
+        })
+        Core.Util.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 1), Parent = self._body })
+        self:_buildHeaders()
+        self:SetRows(self._rows)
+        return self
+    end
+    function DataTable:_buildHeaders()
+        for _, child in ipairs(self._headerRow:GetChildren()) do
+            if child:IsA("TextLabel") then child:Destroy() end
+        end
+        local colW = #self._headers > 0 and (1 / #self._headers) or 1
+        for i, h in ipairs(self._headers) do
+            Core.Util.Create("TextLabel", {
+                Name = h, Size = UDim2.new(colW, 0, 1, 0), BackgroundTransparency = 1,
+                Text = h, TextColor3 = self._theme.TextColor, Font = self._theme.Font,
+                TextSize = 13, LayoutOrder = i, Parent = self._headerRow
+            })
+        end
+    end
+    function DataTable:_buildRow(rowData, index)
+        local colW   = #self._headers > 0 and (1 / #self._headers) or 1
+        local isEven = (index % 2 == 0)
+        local row = Core.Util.Create("Frame", {
+            Name = "Row" .. tostring(index), Size = UDim2.new(1, 0, 0, self._rowHeight),
+            BackgroundColor3 = isEven and self._theme.Background2 or self._theme.Background,
+            BackgroundTransparency = isEven and 0 or 0.3, BorderSizePixel = 0,
+            LayoutOrder = index, Parent = self._body
+        })
+        Core.Util.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, SortOrder = Enum.SortOrder.LayoutOrder, Parent = row })
+        for i, cell in ipairs(rowData) do
+            Core.Util.Create("TextLabel", {
+                Name = "Cell" .. tostring(i), Size = UDim2.new(colW, 0, 1, 0), BackgroundTransparency = 1,
+                Text = tostring(cell), TextColor3 = self._theme.SubTextColor,
+                Font = self._theme.Font, TextSize = 13, LayoutOrder = i, Parent = row
+            })
+        end
+        return row
+    end
+    function DataTable:SetRows(rows)
+        self._rows = rows or {}
+        for _, child in ipairs(self._body:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+        for i, row in ipairs(self._rows) do self:_buildRow(row, i) end
+    end
+    function DataTable:AddRow(rowData)
+        table.insert(self._rows, rowData)
+        self:_buildRow(rowData, #self._rows)
+    end
+    function DataTable:ClearRows()
+        self._rows = {}
+        for _, child in ipairs(self._body:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+    end
+    function DataTable:RefreshTheme()
+        if self._destroyed then return end
+        self._headerRow.BackgroundColor3 = self._theme.Background2
+        local stroke = self._headerRow:FindFirstChildOfClass("UIStroke")
+        if stroke then stroke.Color = self._theme.Border end
+        for _, child in ipairs(self._headerRow:GetChildren()) do
+            if child:IsA("TextLabel") then
+                child.TextColor3 = self._theme.TextColor
+                child.Font = self._theme.Font
+            end
+        end
+        self:SetRows(self._rows)
+    end
+
+    -- CodeBlock: monospaced read-only text display with optional clipboard copy
+    CodeBlock = setmetatable({}, {__index = BaseComponent})
+    CodeBlock.__index = CodeBlock
+    function CodeBlock.new(props)
+        local self = BaseComponent.new({ Name = "CodeBlock", Theme = props.Theme })
+        setmetatable(self, CodeBlock)
+        self._text     = props.Text or ""
+        self._maxLines = props.MaxLines or 10
+        local lineCount = select(2, self._text:gsub("\n", "\n")) + 1
+        local visLines  = math.min(lineCount, self._maxLines)
+        local totalH    = visLines * 18 + 14
+        self.Root = Core.Util.Create("Frame", {
+            Name = "CodeBlock", Size = UDim2.new(1, 0, 0, totalH),
+            BackgroundColor3 = self._theme.Background2, BorderSizePixel = 0,
+            ClipsDescendants = true, Parent = props.Parent
+        })
+        Core.Util.Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = self.Root })
+        Core.Util.Create("UIStroke", { Color = self._theme.Border, Thickness = 1, Parent = self.Root })
+        Core.Util.Create("UIPadding", {
+            PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8),
+            PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6), Parent = self.Root
+        })
+        self._textLabel = Core.Util.Create("TextLabel", {
+            Name = "Code", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+            Text = self._text, TextColor3 = self._theme.TextColor,
+            Font = self._theme.FontMono or Enum.Font.Code, TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+            TextWrapped = true, Parent = self.Root
+        })
+        if Core.Compat.hasClipboard then
+            self._copyBtn = Core.Util.Create("TextButton", {
+                Name = "CopyBtn", Size = UDim2.fromOffset(44, 16),
+                Position = UDim2.new(1, -52, 0, 4), BackgroundColor3 = self._theme.Background2,
+                Text = "copy", TextColor3 = self._theme.SubTextColor,
+                Font = self._theme.Font, TextSize = 11, BorderSizePixel = 0, ZIndex = 2, Parent = self.Root
+            })
+            Core.Util.Create("UICorner",  { CornerRadius = UDim.new(0, 3), Parent = self._copyBtn })
+            Core.Util.Create("UIStroke",  { Color = self._theme.Border, Thickness = 1, Parent = self._copyBtn })
+            self._copyBtn.InputBegan:Connect(function(input)
+                if Core.Util.IsActivate(input.UserInputType) then
+                    local fn = typeof(setclipboard) == "function" and setclipboard
+                            or typeof(toclipboard)   == "function" and toclipboard
+                    if fn then pcall(fn, self._text) end
+                    self._copyBtn.Text = "✓"
+                    task.delay(1.5, function()
+                        if not self._destroyed and self._copyBtn then self._copyBtn.Text = "copy" end
+                    end)
+                end
+            end)
+        end
+        return self
+    end
+    function CodeBlock:SetText(text)
+        self._text = text or ""
+        if self._textLabel then self._textLabel.Text = self._text end
+        local lineCount = select(2, self._text:gsub("\n", "\n")) + 1
+        local visLines  = math.min(lineCount, self._maxLines)
+        self.Root.Size  = UDim2.new(1, 0, 0, visLines * 18 + 14)
+    end
+    function CodeBlock:RefreshTheme()
+        if self._destroyed then return end
+        self.Root.BackgroundColor3 = self._theme.Background2
+        local stroke = self.Root:FindFirstChildOfClass("UIStroke")
+        if stroke then stroke.Color = self._theme.Border end
+        if self._textLabel then
+            self._textLabel.TextColor3 = self._theme.TextColor
+            self._textLabel.Font = self._theme.FontMono or Enum.Font.Code
+        end
+        if self._copyBtn then
+            self._copyBtn.BackgroundColor3 = self._theme.Background2
+            self._copyBtn.TextColor3 = self._theme.SubTextColor
+            self._copyBtn.Font = self._theme.Font
+            local cs = self._copyBtn:FindFirstChildOfClass("UIStroke")
+            if cs then cs.Color = self._theme.Border end
+        end
     end
 
     -- Section
@@ -3905,6 +4397,10 @@ local function BuildUI(Theme)
     UI.ProgressBar = ProgressBar
     UI.KeybindList = KeybindListController
     UI.Tabbox = Tabbox
+    UI.Separator = Separator
+    UI.RadioGroup = RadioGroup
+    UI.DataTable = DataTable
+    UI.CodeBlock = CodeBlock
 
     function Window:GetParent() return (self._currentTab and self._currentTab.Page) or self.Content end
     function Window:GetTheme() return self._theme end
