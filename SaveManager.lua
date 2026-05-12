@@ -14,7 +14,8 @@ local SaveManager = {} do
             end,
             Load = function(idx, data, object)
                 if object then
-                    object:SetValue(data.value)
+                    -- animate=false, ignoreCallback=true — no notification spam on load
+                    object:SetValue(data.value, false, true)
                 end
             end,
         },
@@ -24,7 +25,7 @@ local SaveManager = {} do
             end,
             Load = function(idx, data, object)
                 if object then
-                    object:SetValue(tonumber(data.value))
+                    object:SetValue(tonumber(data.value), false, true)
                 end
             end,
         },
@@ -34,7 +35,7 @@ local SaveManager = {} do
             end,
             Load = function(idx, data, object)
                 if object then
-                    object:SetValue(data.value)
+                    object:SetValue(data.value, false, true)
                 end
             end,
         },
@@ -55,6 +56,27 @@ local SaveManager = {} do
             Load = function(idx, data, object)
                 if object then
                     object:SetValue(data.value)
+                end
+            end,
+        },
+        MultiDropdown = {
+            Save = function(idx, object)
+                return { type = 'MultiDropdown', idx = idx, values = object:GetValues() }
+            end,
+            Load = function(idx, data, object)
+                if object and type(data.values) == 'table' then
+                    -- animate=false, ignoreCallback=true — state is synced via OnLoaded
+                    object:SetValues(data.values, false, true)
+                end
+            end,
+        },
+        RadioGroup = {
+            Save = function(idx, object)
+                return { type = 'RadioGroup', idx = idx, value = object:GetValue() }
+            end,
+            Load = function(idx, data, object)
+                if object then
+                    object:SetValue(data.value, true)
                 end
             end,
         },
@@ -180,6 +202,11 @@ local SaveManager = {} do
                     warn('SaveManager: Failed to apply config option:', perr)
                 end
             end
+        end
+
+        -- Fire the post-load hook (e.g. to refresh derived UI like status labels)
+        if self.OnLoaded then
+            pcall(self.OnLoaded)
         end
 
         return true
